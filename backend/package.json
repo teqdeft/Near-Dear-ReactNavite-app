@@ -1,0 +1,41 @@
+{
+  "name": "neardear-backend",
+  "version": "1.0.0",
+  "description": "NearDear MVP backend - blood donation, ambulance and pharmacy marketplace API",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "knex migrate:latest --knexfile knexfile.js",
+    "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js",
+    "migrate:make": "knex migrate:make --knexfile knexfile.js",
+    "seed": "knex seed:run --knexfile knexfile.js",
+    "db:setup": "npm run migrate && npm run seed"
+  },
+  "keywords": [
+    "neardear",
+    "healthcare",
+    "blood-donation",
+    "ambulance",
+    "pharmacy"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-validator": "^7.2.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.2.0",
+    "mysql2": "^3.11.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

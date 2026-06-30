@@ -1,0 +1,103 @@
+import React, { useState, useCallback } from 'react';
+import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { AmbulanceApi } from '../../api';
+import { errMessage } from '../../api/client';
+import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
+import { colors, spacing, font } from '../../theme';
+
+const FLOW = ['requested', 'assigned', 'accepted', 'on_the_way', 'picked_up', 'completed'];
+const LABELS = {
+  requested: 'Request received', assigned: 'Ambulance assigned', accepted: 'Driver accepted',
+  on_the_way: 'On the way to pickup', picked_up: 'Patient picked up', completed: 'Trip completed',
+};
+
+export default function AmbulanceDetailScreen({ route }) {
+  const { id } = route.params;
+  const [r, setR] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setR(await AmbulanceApi.requestDetail(id)); } catch (e) { Alert.alert('Error', errMessage(e)); }
+  }, [id]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  if (!r) return <Loader />;
+
+  const cancelled = r.status === 'cancelled';
+  const currentIdx = FLOW.indexOf(r.status);
+
+  const cancel = () => {
+    Alert.alert('Cancel ambulance?', 'Are you sure you want to cancel this request?', [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes, cancel', style: 'destructive', onPress: async () => {
+        setBusy(true);
+        try { await AmbulanceApi.cancelRequest(id); await load(); } catch (e) { Alert.alert('Error', errMessage(e)); } finally { setBusy(false); }
+      } },
+    ]);
+  };
+
+  return (
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}>
+      <Card>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Text style={styles.title}>{r.patient_name}</Text>
+          <Pill label={r.status.replace(/_/g, ' ')} color={cancelled ? colors.danger : colors.ambulance} />
+        </Row>
+        <Muted style={{ marginTop: spacing.sm }}>📍 Pickup: {r.pickup_address}</Muted>
+        <Muted>🏥 Drop: {r.drop_address}</Muted>
+        <Pill label={`Type: ${r.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
+
+        {r.driver_name && (
+          <View style={styles.driver}>
+            <Text style={styles.driverTitle}>🚑 {r.vehicle_number || 'Assigned vehicle'}</Text>
+            <Muted>Driver: {r.driver_name}</Muted>
+            {r.driver_mobile && (
+              <AppButton title={`📞 Call driver`} variant="outline" color={colors.success}
+                style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${r.driver_mobile}`)} />
+            )}
+          </View>
+        )}
+      </Card>
+
+      {!cancelled && (
+        <Card style={{ marginTop: spacing.lg }}>
+          <Text style={styles.timelineTitle}>Status</Text>
+          {FLOW.map((step, i) => {
+            const done = i <= currentIdx;
+            const active = i === currentIdx;
+            return (
+              <Row key={step} style={{ alignItems: 'flex-start', marginTop: i === 0 ? spacing.sm : 0 }}>
+                <View style={styles.timelineCol}>
+                  <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]} />
+                  {i < FLOW.length - 1 && <View style={[styles.line, done && styles.lineDone]} />}
+                </View>
+                <Text style={[styles.step, done && styles.stepDone]}>{LABELS[step]}</Text>
+              </Row>
+            );
+          })}
+        </Card>
+      )}
+
+      {['requested', 'assigned', 'accepted'].includes(r.status) && (
+        <AppButton title="Cancel request" variant="outline" color={colors.danger} loading={busy}
+          style={{ marginTop: spacing.lg }} onPress={cancel} />
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
+  driver: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  driverTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  timelineTitle: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginBottom: spacing.sm },
+  timelineCol: { width: 24, alignItems: 'center' },
+  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.border, marginTop: 2 },
+  dotDone: { backgroundColor: colors.ambulance },
+  dotActive: { borderWidth: 3, borderColor: colors.ambulanceLight },
+  line: { width: 2, height: 28, backgroundColor: colors.border },
+  lineDone: { backgroundColor: colors.ambulance },
+  step: { flex: 1, marginLeft: spacing.sm, color: colors.textMuted, fontSize: font.body, paddingBottom: 18 },
+  stepDone: { color: colors.text, fontWeight: font.medium },
+});
