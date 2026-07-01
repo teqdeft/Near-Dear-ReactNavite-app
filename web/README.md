@@ -2,7 +2,7 @@
 
 React (Vite, JavaScript) dashboard for the **Admin** and **Pharmacy** roles. These roles use
 **email/mobile + password** (not OTP) — this is where pharmacies sign up and where admins approve them.
-
+.
 ## Run
 ```bash
 cd web
