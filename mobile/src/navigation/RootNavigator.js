@@ -7,6 +7,7 @@ import { Text } from 'react-native';
 import { useAuth } from '../store/AuthContext';
 import { colors, font } from '../theme';
 import { Loader } from '../components/UI';
+import AnimatedTabBar from '../components/AnimatedTabBar';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -53,32 +54,15 @@ import SupportScreen from '../screens/common/SupportScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ emoji, focused }) {
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>
-    </View>
-  );
-}
-
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: font.tiny, fontWeight: font.medium },
-      }}>
-      <Tab.Screen name="Home" component={HomeScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} /> }} />
-      <Tab.Screen name="Orders" component={OrdersScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🧾" focused={focused} /> }} />
-      <Tab.Screen name="Alerts" component={NotificationsScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🔔" focused={focused} /> }} />
-      <Tab.Screen name="Profile" component={ProfileScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👤" focused={focused} /> }} />
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <AnimatedTabBar {...props} activeColor={colors.primary} />}>
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Orders" component={OrdersScreen} />
+      <Tab.Screen name="Alerts" component={NotificationsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -86,21 +70,12 @@ function MainTabs() {
 function DriverTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.ambulance,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: font.tiny, fontWeight: font.medium },
-      }}>
-      <Tab.Screen name="DriverHome" component={DriverDashboardScreen}
-        options={{ title: 'Dashboard', tabBarIcon: ({ focused }) => <TabIcon emoji="🚑" focused={focused} /> }} />
-      <Tab.Screen name="DriverTrips" component={DriverTripsScreen}
-        options={{ title: 'My Trips', tabBarIcon: ({ focused }) => <TabIcon emoji="🧭" focused={focused} /> }} />
-      <Tab.Screen name="Alerts" component={NotificationsScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🔔" focused={focused} /> }} />
-      <Tab.Screen name="Profile" component={ProfileScreen}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👤" focused={focused} /> }} />
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <AnimatedTabBar {...props} activeColor={colors.ambulance} />}>
+      <Tab.Screen name="DriverHome" component={DriverDashboardScreen} />
+      <Tab.Screen name="DriverTrips" component={DriverTripsScreen} />
+      <Tab.Screen name="Alerts" component={NotificationsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }

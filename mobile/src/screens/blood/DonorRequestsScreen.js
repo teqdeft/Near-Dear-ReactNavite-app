@@ -42,7 +42,7 @@ export default function DonorRequestsScreen() {
       data={items}
       keyExtractor={(i) => String(i.match_id)}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListEmptyComponent={<EmptyState icon="🔔" title="No requests for you yet"
+      ListEmptyComponent={<EmptyState icon="bell" title="No requests for you yet"
         subtitle="When someone nearby needs your blood group, it'll appear here." />}
       renderItem={({ item }) => (
         <Card style={styles.card}>
@@ -54,7 +54,7 @@ export default function DonorRequestsScreen() {
             <Pill label={item.blood_group_required} color={colors.blood} />
             <Muted style={{ marginLeft: 8 }}>{item.units_required} unit(s)</Muted>
           </Row>
-          <Muted style={{ marginTop: 4 }}>🏥 {item.hospital_name}, {item.city}</Muted>
+          <Muted style={{ marginTop: 4 }}>{item.hospital_name}, {item.city}</Muted>
 
           {item.response_status === 'pending' ? (
             <Row style={{ marginTop: spacing.md }}>
@@ -64,7 +64,7 @@ export default function DonorRequestsScreen() {
                 style={{ flex: 1 }} onPress={() => respond(item.match_id, 'decline')} />
             </Row>
           ) : item.contact_shared && item.contact_person_mobile ? (
-            <AppButton title={`📞 Call ${item.contact_person_name} • ${item.contact_person_mobile}`} variant="outline" color={colors.success}
+            <AppButton title={`Call ${item.contact_person_name} • ${item.contact_person_mobile}`} icon="phone" variant="outline" color={colors.success}
               style={{ marginTop: spacing.md }} onPress={() => Linking.openURL(`tel:${item.contact_person_mobile}`)} />
           ) : (
             <Pill label={item.response_status} color={colors.textMuted} style={{ marginTop: spacing.md }} />

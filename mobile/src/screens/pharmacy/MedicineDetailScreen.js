@@ -48,7 +48,7 @@ export default function MedicineDetailScreen({ route, navigation }) {
         <Row style={{ justifyContent: 'space-between' }}>
           <View>
             <Text style={styles.label}>Sold by</Text>
-            <Text style={styles.pharmacy}>🏪 {m.pharmacy_name}</Text>
+            <Text style={styles.pharmacy}>{m.pharmacy_name}</Text>
             <Muted>{m.pharmacy_city}</Muted>
           </View>
           <View style={{ alignItems: 'flex-end' }}>

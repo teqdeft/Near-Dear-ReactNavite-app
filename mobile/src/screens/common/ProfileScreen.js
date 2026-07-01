@@ -1,30 +1,19 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { ProfileApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, TextField } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, Avatar, ListRow } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
-function MenuItem({ emoji, label, onPress, danger }) {
-  return (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.8}>
-      <Text style={{ fontSize: 20, marginRight: spacing.md }}>{emoji}</Text>
-      <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
-      <Text style={styles.chev}>›</Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function ProfileScreen({ navigation }) {
-  const { user, profile, aadhaarVerified, logout, refreshUser } = useAuth();
+  const { user, profile, aadhaarVerified, isDriver, logout, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [city, setCity] = useState(profile?.city || '');
   const [saving, setSaving] = useState(false);
-
-  const initials = (user?.name || 'U').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   const save = async () => {
     setSaving(true);
@@ -32,49 +21,44 @@ export default function ProfileScreen({ navigation }) {
       await ProfileApi.update({ name: name.trim(), city: city.trim() });
       await refreshUser();
       setEditing(false);
-    } catch (e) { Alert.alert('Error', errMessage(e)); }
-    finally { setSaving(false); }
+    } catch (e) { Alert.alert('Error', errMessage(e)); } finally { setSaving(false); }
   };
 
-  const confirmLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' }, { text: 'Log out', style: 'destructive', onPress: logout },
-    ]);
-  };
+  const confirmLogout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
+    { text: 'Cancel', style: 'cancel' }, { text: 'Log out', style: 'destructive', onPress: logout },
+  ]);
 
-  const requestDeletion = () => {
-    Alert.alert('Delete account', 'This sends a data deletion request to our team. Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Request deletion', style: 'destructive', onPress: async () => {
-        try { await ProfileApi.requestDeletion('User requested deletion from app'); Alert.alert('Submitted', 'We will process your request.'); }
-        catch (e) { Alert.alert('Error', errMessage(e)); }
-      } },
-    ]);
-  };
+  const requestDeletion = () => Alert.alert('Delete account', 'This sends a data deletion request to our team. Continue?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Request deletion', style: 'destructive', onPress: async () => {
+      try { await ProfileApi.requestDeletion('User requested deletion from app'); Alert.alert('Submitted', 'We will process your request.'); }
+      catch (e) { Alert.alert('Error', errMessage(e)); }
+    } },
+  ]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
+          <Avatar name={user?.name} size={80} color={isDriver ? colors.ambulance : colors.primary} />
           <Text style={styles.name}>{user?.name || 'NearDear User'}</Text>
-          <Muted>+91 {user?.mobile}</Muted>
+          <Row><Icon name="phone" size={14} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>+91 {user?.mobile}</Muted></Row>
           <Row style={{ marginTop: spacing.sm }}>
             {aadhaarVerified
-              ? <Pill label="🛡️ Aadhaar Verified" color={colors.success} />
-              : <Pill label="Aadhaar not verified" color={colors.warning} />}
+              ? <Pill label="Aadhaar Verified" color={colors.success} icon="shield" />
+              : <Pill label="Aadhaar not verified" color={colors.warning} icon="alert" />}
             {profile?.blood_group ? <Pill label={profile.blood_group} color={colors.blood} style={{ marginLeft: 8 }} /> : null}
           </Row>
         </View>
 
         {!aadhaarVerified && (
-          <AppButton title="🛡️ Verify Aadhaar now" onPress={() => navigation.navigate('AadhaarVerify')} style={{ marginBottom: spacing.lg }} />
+          <AppButton title="Verify Aadhaar now" icon="shield" onPress={() => navigation.navigate('AadhaarVerify')} style={{ marginBottom: spacing.lg }} />
         )}
 
         {editing ? (
           <Card style={{ marginBottom: spacing.lg }}>
-            <TextField label="Name" value={name} onChangeText={setName} />
-            <TextField label="City" value={city} onChangeText={setCity} />
+            <TextField label="Name" leftIcon="user" value={name} onChangeText={setName} />
+            <TextField label="City" leftIcon="location" value={city} onChangeText={setCity} />
             <Row>
               <AppButton title="Save" loading={saving} onPress={save} style={{ flex: 1, marginRight: spacing.sm }} />
               <AppButton title="Cancel" variant="outline" onPress={() => setEditing(false)} style={{ flex: 1 }} />
@@ -83,16 +67,16 @@ export default function ProfileScreen({ navigation }) {
         ) : null}
 
         <Card style={styles.menu}>
-          <MenuItem emoji="✏️" label="Edit profile" onPress={() => setEditing(true)} />
-          <MenuItem emoji="🩸" label="Donor profile" onPress={() => navigation.navigate('BecomeDonor')} />
-          <MenuItem emoji="📄" label="My prescriptions" onPress={() => navigation.navigate('Prescriptions')} />
-          <MenuItem emoji="🧾" label="My orders" onPress={() => navigation.navigate('Orders')} />
-          <MenuItem emoji="💬" label="Support" onPress={() => navigation.navigate('Support')} />
+          <ListRow icon="edit" title="Edit profile" onPress={() => setEditing(true)} />
+          {!isDriver && <ListRow icon="donor" iconColor={colors.blood} title="Donor profile" onPress={() => navigation.navigate('BecomeDonor')} />}
+          {!isDriver && <ListRow icon="prescription" iconColor={colors.pharmacy} title="My prescriptions" onPress={() => navigation.navigate('Prescriptions')} />}
+          {!isDriver && <ListRow icon="orders" title="My orders" onPress={() => navigation.navigate('Orders')} />}
+          <ListRow icon="support" iconColor={colors.ambulance} title="Support" onPress={() => navigation.navigate('Support')} last />
         </Card>
 
         <Card style={styles.menu}>
-          <MenuItem emoji="🚪" label="Log out" onPress={confirmLogout} danger />
-          <MenuItem emoji="🗑️" label="Request account deletion" onPress={requestDeletion} danger />
+          <ListRow icon="logout" title="Log out" danger onPress={confirmLogout} right={<Icon name="next" size={22} color={colors.danger} />} />
+          <ListRow icon="trash" title="Request account deletion" danger last onPress={requestDeletion} right={<Icon name="next" size={22} color={colors.danger} />} />
         </Card>
 
         <Muted style={{ textAlign: 'center', marginTop: spacing.lg }}>NearDear • MVP v1.0</Muted>
@@ -102,12 +86,7 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  headerCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.xl, marginBottom: spacing.lg },
-  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
-  avatarText: { color: colors.white, fontSize: font.h2, fontWeight: font.bold },
-  name: { fontSize: font.h2, fontWeight: font.bold, color: colors.text },
-  menu: { padding: 0, overflow: 'hidden', marginBottom: spacing.lg },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-  menuLabel: { flex: 1, fontSize: font.body, color: colors.text, fontWeight: font.medium },
-  chev: { fontSize: 22, color: colors.textMuted },
+  headerCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
+  name: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, marginTop: spacing.md, marginBottom: 4 },
+  menu: { paddingVertical: 0, marginBottom: spacing.lg },
 });

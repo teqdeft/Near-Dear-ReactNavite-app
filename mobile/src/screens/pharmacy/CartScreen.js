@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, EmptyState } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
 export default function CartScreen({ navigation }) {
@@ -10,7 +11,7 @@ export default function CartScreen({ navigation }) {
   if (items.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <EmptyState icon="🛒" title="Your cart is empty" subtitle="Browse medicines and add items to your cart."
+        <EmptyState icon="cart" title="Your cart is empty" subtitle="Browse medicines and add items to your cart."
           action={<AppButton title="Browse medicines" color={colors.pharmacy} onPress={() => navigation.navigate('PharmacyHome')} />} />
       </View>
     );
@@ -19,7 +20,7 @@ export default function CartScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 160 }}>
-        <Muted style={{ marginBottom: spacing.md }}>🏪 Items from {pharmacyName}</Muted>
+        <Muted style={{ marginBottom: spacing.md }}>Items from {pharmacyName}</Muted>
         {items.map((item) => (
           <Card key={item.pharmacy_medicine_id} style={styles.card}>
             <Row style={{ justifyContent: 'space-between' }}>
@@ -34,11 +35,11 @@ export default function CartScreen({ navigation }) {
             <Row style={{ justifyContent: 'space-between', marginTop: spacing.md }}>
               <Row style={styles.stepper}>
                 <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(item.pharmacy_medicine_id, item.quantity - 1)}>
-                  <Text style={styles.stepText}>−</Text>
+                  <Icon name="minus" size={18} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.qty}>{item.quantity}</Text>
                 <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(item.pharmacy_medicine_id, item.quantity + 1)}>
-                  <Text style={styles.stepText}>＋</Text>
+                  <Icon name="plus" size={18} color={colors.text} />
                 </TouchableOpacity>
               </Row>
               <Text style={styles.price}>₹{(item.price * item.quantity).toFixed(0)}</Text>
@@ -48,7 +49,7 @@ export default function CartScreen({ navigation }) {
 
         {needsPrescription && (
           <Card style={styles.rxNote}>
-            <Text style={styles.rxTitle}>📄 Prescription required</Text>
+            <Text style={styles.rxTitle}>Prescription required</Text>
             <Muted style={{ marginTop: 4 }}>You'll attach a prescription at checkout for the Rx items.</Muted>
           </Card>
         )}

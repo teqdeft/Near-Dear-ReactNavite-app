@@ -35,7 +35,7 @@ export default function CreateBloodRequestScreen({ navigation }) {
         patient_age: form.patient_age ? Number(form.patient_age) : undefined,
         units_required: Number(form.units_required) || 1,
       });
-      Alert.alert('Request created 🩸', `${res.matchedDonors} donor(s) notified nearby.`);
+      Alert.alert('Request created', `${res.matchedDonors} donor(s) notified nearby.`);
       navigation.replace('BloodRequestDetail', { id: res.request.id });
     } catch (e) {
       Alert.alert('Error', errMessage(e));

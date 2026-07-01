@@ -1,141 +1,170 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../store/AuthContext';
-import { colors, spacing, font, radius, shadow } from '../theme';
+import Icon from '../components/Icon';
+import GradientBackground from '../components/GradientBackground';
+import { colors, spacing, font, radius, shadow, gradients } from '../theme';
 
-const MODULES = [
-  {
-    key: 'BloodHome', title: 'Blood Donation', subtitle: 'Find donors or request blood',
-    emoji: '🩸', color: colors.blood, light: colors.bloodLight,
-  },
-  {
-    key: 'AmbulanceHome', title: 'Ambulance', subtitle: 'Book emergency transport',
-    emoji: '🚑', color: colors.ambulance, light: colors.ambulanceLight,
-  },
-  {
-    key: 'PharmacyHome', title: 'Medicines', subtitle: 'Order from nearby pharmacies',
-    emoji: '💊', color: colors.pharmacy, light: colors.pharmacyLight,
-  },
+function ArrowBadge({ color = colors.text, bg = colors.white }) {
+  return (
+    <View style={[styles.arrowBadge, { backgroundColor: bg }]}>
+      <Icon name="arrowUpRight" size={18} color={color} />
+    </View>
+  );
+}
+
+const SERVICES_SMALL = [
+  { key: 'AmbulanceHome', title: 'Ambulance', subtitle: 'Book emergency transport', icon: 'ambulance', color: colors.ambulance, tint: colors.ambulanceLight },
+  { key: 'PharmacyHome', title: 'Medicines', subtitle: 'Order from nearby pharmacies', icon: 'pharmacy', color: colors.pharmacy, tint: colors.pharmacyLight },
 ];
 
 const QUICK = [
-  { emoji: '🩸', label: 'Donate blood', to: 'BecomeDonor', tint: colors.bloodLight },
-  { emoji: '🆘', label: 'Request blood', to: 'CreateBloodRequest', tint: colors.bloodLight },
-  { emoji: '🧾', label: 'My orders', to: 'Orders', tint: colors.pharmacyLight },
-  { emoji: '💬', label: 'Support', to: 'Support', tint: colors.primaryLight },
+  { icon: 'water', label: 'Donate blood', sub: 'Save a life', to: 'BecomeDonor', color: colors.blood },
+  { icon: 'hand-heart-outline', label: 'Request blood', sub: 'Find donors', to: 'CreateBloodRequest', color: colors.orange },
+  { icon: 'clipboard-list-outline', label: 'My orders', sub: 'Track status', to: 'Orders', color: colors.pharmacy },
+  { icon: 'message-text-outline', label: 'Support', sub: "We're here 24/7", to: 'Support', color: colors.ambulance },
 ];
-
-function ServiceCard({ item, onPress }) {
-  return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.service, { backgroundColor: item.light }, shadow.soft]}>
-      <View style={[styles.serviceIcon, { backgroundColor: item.color }]}>
-        <Text style={{ fontSize: 26 }}>{item.emoji}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.serviceTitle}>{item.title}</Text>
-        <Text style={styles.serviceSub}>{item.subtitle}</Text>
-      </View>
-      <View style={[styles.serviceArrow, { backgroundColor: item.color }]}>
-        <Text style={styles.serviceArrowText}>→</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 export default function HomeScreen({ navigation }) {
   const { user, aadhaarVerified } = useAuth();
   const firstName = (user?.name || 'there').split(' ')[0];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        {/* Curved gradient-style header */}
-        <View style={styles.header}>
-          <View style={styles.headerBlob} />
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.hello}>Hello, {firstName} 👋</Text>
-              <Text style={styles.location}>📍 {user?.city || 'Set your city in Profile'}</Text>
-            </View>
+    <GradientBackground>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
+          {/* Top row */}
+          <View style={styles.topRow}>
+            {aadhaarVerified ? (
+              <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
+                <Icon name="check-decagram" size={16} color={colors.white} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={[styles.statusPill, styles.unverifiedPill]} onPress={() => navigation.navigate('AadhaarVerify')}>
+                <Icon name="shield-alert-outline" size={16} color={colors.warning} />
+                <Text style={styles.unverifiedText}>Verify now</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.bell} onPress={() => navigation.navigate('Alerts')}>
-              <Text style={{ fontSize: 20 }}>🔔</Text>
+              <Icon name="bell" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* Emergency CTA overlapping the header */}
-          <View style={[styles.emergency, shadow.card]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.emergencyTitle}>Need urgent help?</Text>
-              <Text style={styles.emergencySub}>Book an ambulance in seconds</Text>
-            </View>
-            <TouchableOpacity style={styles.sosBtn} onPress={() => navigation.navigate('BookAmbulance')}>
-              <Text style={styles.sosText}>🚑 Book</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          {/* Greeting */}
+          <Text style={styles.welcome}>WELCOME BACK</Text>
+          <Text style={styles.hello}>Hello,</Text>
+          <Text style={styles.name}>{firstName}.</Text>
+          <Text style={styles.tagline}>Your health, one tap away. What do you need help with today?</Text>
 
-        {/* Aadhaar banner */}
-        {!aadhaarVerified && (
-          <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('AadhaarVerify')} style={styles.kycBanner}>
-            <Text style={{ fontSize: 22 }}>🛡️</Text>
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={styles.kycTitle}>Verify your Aadhaar</Text>
-              <Text style={styles.kycSub}>Build trust & unlock full access</Text>
-            </View>
-            <Text style={styles.kycCta}>Verify ›</Text>
+          {/* Emergency card */}
+          <TouchableOpacity activeOpacity={0.92} onPress={() => navigation.navigate('BookAmbulance')}>
+            <LinearGradient colors={gradients.emergency} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.sos, shadow.card]}>
+              <View style={styles.sosIcon}><Icon name="ambulance" size={26} color={colors.white} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sosLabel}>EMERGENCY</Text>
+                <Text style={styles.sosTitle}>Need urgent help?</Text>
+                <Text style={styles.sosSub}>Book an ambulance in seconds</Text>
+              </View>
+              <ArrowBadge color={colors.blood} />
+            </LinearGradient>
           </TouchableOpacity>
-        )}
 
-        {/* Our services */}
-        <Text style={styles.section}>Our services</Text>
-        <View style={{ paddingHorizontal: spacing.lg }}>
-          {MODULES.map((m) => (
-            <ServiceCard key={m.key} item={m} onPress={() => navigation.navigate(m.key)} />
-          ))}
-        </View>
-
-        {/* Quick actions */}
-        <Text style={styles.section}>Quick actions</Text>
-        <View style={styles.quickRow}>
-          {QUICK.map((q) => (
-            <TouchableOpacity key={q.label} style={styles.quick} activeOpacity={0.85} onPress={() => navigation.navigate(q.to)}>
-              <View style={[styles.quickIcon, { backgroundColor: q.tint }]}><Text style={{ fontSize: 22 }}>{q.emoji}</Text></View>
-              <Text style={styles.quickLabel}>{q.label}</Text>
+          {/* Services header */}
+          <View style={styles.svcHeader}>
+            <View>
+              <Text style={styles.section}>Our services</Text>
+              <Text style={styles.sectionSub}>Care that reaches you fast</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('BloodHome')}>
+              <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          </View>
+
+          {/* Big blood card */}
+          <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('BloodHome')} style={[styles.bigCard, { backgroundColor: colors.bloodLight }]}>
+            <View style={styles.cardTop}>
+              <View style={[styles.circle, { backgroundColor: colors.blood }]}><Icon name="blood" size={26} color={colors.white} /></View>
+              <ArrowBadge />
+            </View>
+            <Text style={styles.bigTitle}>Blood Donation</Text>
+            <Text style={styles.bigSub}>Find donors or request blood near you</Text>
+          </TouchableOpacity>
+
+          {/* Two small service cards */}
+          <View style={styles.smallRow}>
+            {SERVICES_SMALL.map((s) => (
+              <TouchableOpacity key={s.key} activeOpacity={0.9} onPress={() => navigation.navigate(s.key)} style={[styles.smallCard, { backgroundColor: s.tint }]}>
+                <View style={styles.cardTop}>
+                  <View style={[styles.circle, { backgroundColor: s.color }]}><Icon name={s.icon} size={22} color={colors.white} /></View>
+                  <ArrowBadge />
+                </View>
+                <Text style={styles.smallTitle}>{s.title}</Text>
+                <Text style={styles.smallSub}>{s.subtitle}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Quick actions */}
+          <Text style={[styles.section, { marginTop: spacing.xl, marginBottom: spacing.md }]}>Quick actions</Text>
+          <View style={styles.quickGrid}>
+            {QUICK.map((q) => (
+              <TouchableOpacity key={q.label} activeOpacity={0.9} onPress={() => navigation.navigate(q.to)} style={[styles.quickCard, shadow.soft]}>
+                <View style={[styles.quickIcon, { backgroundColor: q.color }]}><Icon name={q.icon} size={20} color={colors.white} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.quickTitle}>{q.label}</Text>
+                  <Text style={styles.quickSub}>{q.sub}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  header: { backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 46, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' },
-  headerBlob: { position: 'absolute', top: -50, right: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.08)' },
-  headerRow: { flexDirection: 'row', alignItems: 'center' },
-  hello: { fontSize: font.h2, fontWeight: font.bold, color: colors.white },
-  location: { fontSize: font.small, color: '#D7F4EF', marginTop: 2 },
-  bell: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  emergency: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#102A43', borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.lg, marginBottom: -36 },
-  emergencyTitle: { color: colors.white, fontWeight: font.bold, fontSize: font.h3 },
-  emergencySub: { color: '#B9C7D6', fontSize: font.small, marginTop: 2 },
-  sosBtn: { backgroundColor: colors.blood, paddingHorizontal: spacing.lg, paddingVertical: 12, borderRadius: radius.pill },
-  sosText: { color: colors.white, fontWeight: font.bold },
-  kycBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF6E6', marginHorizontal: spacing.lg, marginTop: spacing.xxl + spacing.md, padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: '#F3DFB0' },
-  kycTitle: { fontWeight: font.bold, color: '#8A6300', fontSize: font.body },
-  kycSub: { color: '#A9802E', fontSize: font.tiny, marginTop: 2 },
-  kycCta: { color: '#8A6300', fontWeight: font.bold },
-  section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginTop: spacing.xl, marginBottom: spacing.md, marginHorizontal: spacing.lg },
-  service: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md },
-  serviceIcon: { width: 56, height: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
-  serviceTitle: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
-  serviceSub: { fontSize: font.small, color: colors.textMuted, marginTop: 2 },
-  serviceArrow: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  serviceArrowText: { color: colors.white, fontSize: 18, fontWeight: font.bold },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.lg },
-  quick: { alignItems: 'center', width: '23%' },
-  quickIcon: { width: 58, height: 58, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
-  quickLabel: { fontSize: font.tiny, color: colors.text, marginTop: 6, textAlign: 'center', fontWeight: font.medium },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
+  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, ...shadow.soft },
+  verifiedText: { marginLeft: 6, color: colors.white, fontWeight: font.bold, fontSize: font.small },
+  unverifiedPill: { backgroundColor: colors.white, borderWidth: 1, borderColor: '#F6E3B8' },
+  unverifiedText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
+  bell: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
+
+  welcome: { color: colors.textMuted, fontSize: font.tiny, fontWeight: font.bold, letterSpacing: 1.5 },
+  hello: { fontSize: 40, fontWeight: font.bold, color: colors.text, marginTop: 6, lineHeight: 44 },
+  name: { fontSize: 40, fontWeight: font.bold, color: colors.primary, lineHeight: 44 },
+  tagline: { color: colors.textMuted, fontSize: font.body, marginTop: spacing.md, marginBottom: spacing.xl, lineHeight: 21 },
+
+  sos: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing.lg },
+  sosIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  sosLabel: { color: 'rgba(255,255,255,0.85)', fontSize: font.tiny, fontWeight: font.bold, letterSpacing: 1.2 },
+  sosTitle: { color: colors.white, fontWeight: font.bold, fontSize: font.h3, marginTop: 2 },
+  sosSub: { color: 'rgba(255,255,255,0.9)', fontSize: font.small, marginTop: 2 },
+  arrowBadge: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+
+  svcHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: spacing.xl, marginBottom: spacing.md },
+  section: { fontSize: font.h2, fontWeight: font.bold, color: colors.text },
+  sectionSub: { color: colors.textMuted, fontSize: font.small, marginTop: 2 },
+  seeAll: { color: colors.primary, fontWeight: font.bold, fontSize: font.body, marginTop: 4 },
+
+  bigCard: { borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
+  circle: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  bigTitle: { fontSize: font.h2, fontWeight: font.bold, color: colors.text },
+  bigSub: { color: colors.textMuted, fontSize: font.small, marginTop: 4 },
+
+  smallRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  smallCard: { width: '48.5%', borderRadius: radius.lg, padding: spacing.lg },
+  smallTitle: { fontSize: font.body, fontWeight: font.bold, color: colors.text },
+  smallSub: { color: colors.textMuted, fontSize: font.tiny, marginTop: 3 },
+
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  quickCard: { width: '48.5%', flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.md },
+  quickIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  quickTitle: { fontSize: font.small, fontWeight: font.bold, color: colors.text },
+  quickSub: { fontSize: font.tiny, color: colors.textMuted, marginTop: 2 },
 });

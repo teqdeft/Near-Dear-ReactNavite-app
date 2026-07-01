@@ -3,10 +3,17 @@ import { FlatList, View, Text, StyleSheet, TouchableOpacity, RefreshControl } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NotificationApi } from '../../api';
-import { Muted, Row, EmptyState, Loader } from '../../components/UI';
+import { Muted, Row, EmptyState, Loader, IconBadge } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
-const TYPE_EMOJI = { blood: '🩸', medicine_order: '💊', ambulance: '🚑', admin: '📢', support: '💬' };
+const TYPE_ICON = {
+  blood: { icon: 'blood', color: colors.blood },
+  medicine_order: { icon: 'pharmacy', color: colors.pharmacy },
+  ambulance: { icon: 'ambulance', color: colors.ambulance },
+  admin: { icon: 'bell', color: colors.primary },
+  support: { icon: 'support', color: colors.info },
+};
 
 export default function NotificationsScreen() {
   const [data, setData] = useState(null);
@@ -31,22 +38,25 @@ export default function NotificationsScreen() {
       </Row>
       {data === null ? <Loader /> : (
         <FlatList
-          contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120, flexGrow: 1 }}
           data={data.items}
           keyExtractor={(i) => String(i.id)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={<EmptyState icon="🔔" title="You're all caught up" subtitle="Alerts about blood, orders and ambulance appear here." />}
-          renderItem={({ item }) => (
-            <TouchableOpacity activeOpacity={0.8} onPress={() => tap(item)}
-              style={[styles.item, !item.is_read && styles.unread]}>
-              <Text style={{ fontSize: 22, marginRight: spacing.md }}>{TYPE_EMOJI[item.type] || '🔔'}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Muted style={{ marginTop: 2 }}>{item.message}</Muted>
-              </View>
-              {!item.is_read ? <View style={styles.dot} /> : null}
-            </TouchableOpacity>
-          )}
+          ListEmptyComponent={<EmptyState icon="bell" title="You're all caught up" subtitle="Alerts about blood, orders and ambulance appear here." />}
+          renderItem={({ item }) => {
+            const t = TYPE_ICON[item.type] || { icon: 'bell', color: colors.primary };
+            return (
+              <TouchableOpacity activeOpacity={0.8} onPress={() => tap(item)}
+                style={[styles.item, !item.is_read && styles.unread]}>
+                <IconBadge name={t.icon} color={t.color} size={40} iconSize={20} style={{ marginRight: spacing.md }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemTitle}>{item.title}</Text>
+                  <Muted style={{ marginTop: 2 }}>{item.message}</Muted>
+                </View>
+                {!item.is_read ? <View style={styles.dot} /> : null}
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </SafeAreaView>

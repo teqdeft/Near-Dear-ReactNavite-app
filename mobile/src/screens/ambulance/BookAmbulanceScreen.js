@@ -29,7 +29,7 @@ export default function BookAmbulanceScreen({ navigation }) {
     setLoading(true);
     try {
       const res = await AmbulanceApi.createRequest(form);
-      Alert.alert('Request sent 🚑', `Nearby drivers have been notified${res?.notifiedDrivers ? ` (${res.notifiedDrivers})` : ''}. A driver will accept and call you shortly.`);
+      Alert.alert('Request sent', `Nearby drivers have been notified${res?.notifiedDrivers ? ` (${res.notifiedDrivers})` : ''}. A driver will accept and call you shortly.`);
       navigation.replace('AmbulanceDetail', { id: res.id });
     } catch (e) {
       Alert.alert('Error', errMessage(e));

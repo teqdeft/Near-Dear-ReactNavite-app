@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font } from '../../theme';
 
 const RESP_COLOR = { accepted: colors.success, declined: colors.danger, pending: colors.warning, no_response: colors.textMuted };
@@ -45,8 +46,8 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
           <Pill label={request.blood_group_required} color={colors.blood} />
           <Muted style={{ marginLeft: 8 }}>{request.units_required} unit(s) • {request.urgency_level}</Muted>
         </Row>
-        <Muted style={{ marginTop: spacing.sm }}>🏥 {request.hospital_name}</Muted>
-        <Muted>📍 {request.hospital_address}, {request.city}</Muted>
+        <Row style={{ marginTop: spacing.sm }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6 }}>{request.hospital_name}</Muted></Row>
+        <Row style={{ marginTop: 2 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>{request.hospital_address}, {request.city}</Muted></Row>
       </Card>
 
       <SectionTitle style={{ marginTop: spacing.lg }}>Matched donors ({matches.length})</SectionTitle>
@@ -61,7 +62,7 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
             </Row>
             <Muted style={{ marginTop: 4 }}>{m.blood_group} • {m.city}</Muted>
             {m.contact_shared && m.donor_mobile ? (
-              <AppButton title={`📞 Call ${m.donor_mobile}`} variant="outline" color={colors.success}
+              <AppButton title={`Call ${m.donor_mobile}`} icon="phone" variant="outline" color={colors.success}
                 onPress={() => Linking.openURL(`tel:${m.donor_mobile}`)} style={{ marginTop: spacing.sm }} />
             ) : (
               <Muted style={{ marginTop: 4, fontStyle: 'italic' }}>Contact shared once the donor accepts.</Muted>

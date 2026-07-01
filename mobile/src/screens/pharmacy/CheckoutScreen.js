@@ -5,11 +5,12 @@ import { ProfileApi, OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
 const PAYMENTS = [
-  { key: 'cod', label: '💵 Cash on delivery' },
-  { key: 'upi_manual', label: '📲 UPI (pay to pharmacy)' },
+  { key: 'cod', label: 'Cash on delivery', icon: 'cash' },
+  { key: 'upi_manual', label: 'UPI (pay to pharmacy)', icon: 'cellphone' },
 ];
 
 export default function CheckoutScreen({ navigation }) {
@@ -114,7 +115,7 @@ export default function CheckoutScreen({ navigation }) {
           <AppButton title="Save address" color={colors.pharmacy} onPress={saveNewAddress} />
         </Card>
       ) : (
-        <TouchableOpacity onPress={() => setAdding(true)}><Text style={styles.link}>＋ Add new address</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setAdding(true)}><Text style={styles.link}>+ Add new address</Text></TouchableOpacity>
       )}
 
       {needsPrescription && (
@@ -123,12 +124,12 @@ export default function CheckoutScreen({ navigation }) {
           {prescriptions.map((p) => (
             <Card key={p.id} onPress={() => setPrescriptionId(p.id)} style={[styles.opt, prescriptionId === p.id && styles.optActive]}>
               <Row style={{ justifyContent: 'space-between' }}>
-                <Text style={styles.optTitle}>📄 Prescription #{p.id}</Text>
+                <Text style={styles.optTitle}>Prescription #{p.id}</Text>
                 {prescriptionId === p.id ? <Pill label="Selected" color={colors.pharmacy} /> : <Pill label={p.status} color={colors.textMuted} />}
               </Row>
             </Card>
           ))}
-          <AppButton title={uploading ? 'Uploading…' : '⬆️ Upload prescription'} variant="outline" color={colors.pharmacy}
+          <AppButton title={uploading ? 'Uploading…' : 'Upload prescription'} icon="upload" variant="outline" color={colors.pharmacy}
             loading={uploading} onPress={uploadPrescription} style={{ marginTop: spacing.sm }} />
         </>
       )}
@@ -137,8 +138,8 @@ export default function CheckoutScreen({ navigation }) {
       {PAYMENTS.map((p) => (
         <Card key={p.key} onPress={() => setPayment(p.key)} style={[styles.opt, payment === p.key && styles.optActive]}>
           <Row style={{ justifyContent: 'space-between' }}>
-            <Text style={styles.optTitle}>{p.label}</Text>
-            {payment === p.key ? <Pill label="✓" color={colors.pharmacy} /> : null}
+            <Row><Icon name={p.icon} size={20} color={colors.text} /><Text style={[styles.optTitle, { marginLeft: 8 }]}>{p.label}</Text></Row>
+            {payment === p.key ? <Icon name="check" size={22} color={colors.pharmacy} /> : null}
           </Row>
         </Card>
       ))}

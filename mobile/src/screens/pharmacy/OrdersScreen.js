@@ -26,12 +26,12 @@ export default function OrdersScreen({ navigation }) {
       <Text style={styles.header}>My Orders</Text>
       {items === null ? <Loader /> : (
         <FlatList
-          contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120, flexGrow: 1 }}
           data={items}
           keyExtractor={(i) => String(i.id)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <EmptyState icon="🧾" title="No orders yet" subtitle="Your medicine orders will appear here."
+            <EmptyState icon="orders" title="No orders yet" subtitle="Your medicine orders will appear here."
               action={<AppButton title="Order medicines" color={colors.pharmacy} onPress={() => navigation.navigate('PharmacyHome')} />} />
           }
           renderItem={({ item }) => (
@@ -40,7 +40,7 @@ export default function OrdersScreen({ navigation }) {
                 <Text style={styles.num}>{item.order_number}</Text>
                 <Pill label={item.order_status.replace(/_/g, ' ')} color={STATUS_COLOR[item.order_status] || colors.textMuted} />
               </Row>
-              <Muted style={{ marginTop: 4 }}>🏪 {item.pharmacy_name}</Muted>
+              <Muted style={{ marginTop: 4 }}>{item.pharmacy_name}</Muted>
               <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
                 <Muted>{item.payment_method?.toUpperCase()}</Muted>
                 <Text style={styles.total}>₹{Number(item.total_amount).toFixed(0)}</Text>

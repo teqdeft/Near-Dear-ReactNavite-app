@@ -37,7 +37,7 @@ export default function MyBloodRequestsScreen({ navigation }) {
       keyExtractor={(i) => String(i.id)}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       ListEmptyComponent={
-        <EmptyState icon="🩸" title="No blood requests yet"
+        <EmptyState icon="blood" title="No blood requests yet"
           subtitle="Create a request to find matching donors."
           action={<AppButton title="Request blood" color={colors.blood} onPress={() => navigation.navigate('CreateBloodRequest')} />} />
       }
@@ -51,7 +51,7 @@ export default function MyBloodRequestsScreen({ navigation }) {
             <Pill label={item.blood_group_required} color={colors.blood} />
             <Muted style={{ marginLeft: 8 }}>{item.units_required} unit(s) • {item.hospital_name}</Muted>
           </Row>
-          <Muted style={{ marginTop: 4 }}>📍 {item.city} • urgency: {item.urgency_level}</Muted>
+          <Muted style={{ marginTop: 4 }}>{item.city} • urgency: {item.urgency_level}</Muted>
         </Card>
       )}
     />

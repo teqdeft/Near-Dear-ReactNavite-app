@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Alert } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
-import { Screen, AppButton, TextField, Card, Pill, Muted } from '../../components/UI';
+import { Screen, AppButton, TextField, Card, Pill, Muted, IconBadge, Row } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font } from '../../theme';
 
 /**
@@ -61,7 +62,7 @@ export default function AadhaarVerifyScreen({ navigation }) {
     return (
       <Screen>
         <Card style={styles.doneCard}>
-          <Text style={{ fontSize: 56 }}>🛡️</Text>
+          <View style={styles.doneIcon}><Icon name="shield" size={44} color={colors.success} /></View>
           <Text style={styles.doneTitle}>Aadhaar Verified</Text>
           <Pill label="KYC Verified" color={colors.success} />
           <Muted style={{ textAlign: 'center', marginTop: spacing.md }}>
@@ -76,8 +77,8 @@ export default function AadhaarVerifyScreen({ navigation }) {
   return (
     <Screen scroll>
       <Card style={{ marginBottom: spacing.lg }}>
-        <Text style={styles.infoTitle}>🔐 Verify your identity</Text>
-        <Muted style={{ marginTop: 4 }}>
+        <Row><IconBadge name="lock" color={colors.primary} size={40} iconSize={20} /><Text style={styles.infoTitle}>  Verify your identity</Text></Row>
+        <Muted style={{ marginTop: spacing.sm }}>
           We use Aadhaar OTP verification. We never store your full Aadhaar number — only a verified
           status and the last 4 digits.
         </Muted>
@@ -120,5 +121,6 @@ export default function AadhaarVerifyScreen({ navigation }) {
 const styles = StyleSheet.create({
   infoTitle: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
   doneCard: { alignItems: 'center', paddingVertical: spacing.xxl },
+  doneIcon: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.pharmacyLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
   doneTitle: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, marginVertical: spacing.sm },
 });

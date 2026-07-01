@@ -41,10 +41,10 @@ export default function OrderDetailScreen({ route }) {
           <Text style={styles.num}>{order.order_number}</Text>
           <Pill label={order.order_status.replace(/_/g, ' ')} color={STATUS_COLOR[order.order_status] || colors.textMuted} />
         </Row>
-        <Muted style={{ marginTop: 4 }}>🏪 {order.pharmacy_name}</Muted>
+        <Muted style={{ marginTop: 4 }}>{order.pharmacy_name}</Muted>
         {order.rejection_reason ? <Muted style={{ color: colors.danger, marginTop: 4 }}>Rejected: {order.rejection_reason}</Muted> : null}
         {order.pharmacy_mobile ? (
-          <AppButton title="📞 Call pharmacy" variant="outline" color={colors.primary} style={{ marginTop: spacing.md }}
+          <AppButton title="Call pharmacy" icon="phone" variant="outline" color={colors.primary} style={{ marginTop: spacing.md }}
             onPress={() => Linking.openURL(`tel:${order.pharmacy_mobile}`)} />
         ) : null}
       </Card>

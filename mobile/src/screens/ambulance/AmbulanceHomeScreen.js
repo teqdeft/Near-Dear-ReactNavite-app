@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { FlatList, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { FlatList, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
-import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
+import { Card, Pill, Muted, Row, Loader } from '../../components/UI';
+import Icon from '../../components/Icon';
+import GradientBackground from '../../components/GradientBackground';
 import { colors, spacing, font, radius, shadow } from '../../theme';
 
 const STATUS_COLOR = {
@@ -23,8 +25,9 @@ export default function AmbulanceHomeScreen({ navigation }) {
   if (items === null) return <Loader />;
 
   return (
+    <GradientBackground>
     <FlatList
-      style={{ backgroundColor: colors.bg }}
+      style={{ backgroundColor: 'transparent' }}
       contentContainerStyle={{ padding: spacing.lg }}
       data={items}
       keyExtractor={(i) => String(i.id)}
@@ -32,11 +35,13 @@ export default function AmbulanceHomeScreen({ navigation }) {
       ListHeaderComponent={
         <View>
           <View style={[styles.hero, shadow.card]}>
-            <Text style={{ fontSize: 40 }}>🚑</Text>
+            <Icon name="ambulance" size={40} color={colors.white} />
             <Text style={styles.heroTitle}>Emergency ambulance</Text>
-            <Text style={styles.heroSub}>Request transport from pickup to hospital. Our team assigns the nearest vehicle.</Text>
-            <AppButton title="🚑  Book an ambulance" variant="outline" color={colors.white} style={styles.heroBtn}
-              onPress={() => navigation.navigate('BookAmbulance')} />
+            <Text style={styles.heroSub}>Nearby drivers get notified and one accepts to pick you up.</Text>
+            <TouchableOpacity style={styles.heroBtn} onPress={() => navigation.navigate('BookAmbulance')}>
+              <Icon name="ambulance" size={18} color={colors.white} />
+              <Text style={styles.heroBtnText}>  Book an ambulance</Text>
+            </TouchableOpacity>
           </View>
           <Text style={styles.section}>Your requests</Text>
         </View>
@@ -48,20 +53,22 @@ export default function AmbulanceHomeScreen({ navigation }) {
             <Text style={styles.patient}>{item.patient_name}</Text>
             <Pill label={item.status.replace(/_/g, ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
           </Row>
-          <Muted style={{ marginTop: 6 }}>📍 {item.pickup_address}</Muted>
-          <Muted>🏥 {item.drop_address}</Muted>
+          <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.pickup_address}</Muted></Row>
+          <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.drop_address}</Muted></Row>
           <Pill label={item.ambulance_type} color={colors.ambulance} style={{ marginTop: 8 }} />
         </Card>
       )}
     />
+    </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: colors.ambulance, borderRadius: radius.xl, padding: spacing.xl, marginBottom: spacing.lg },
+  hero: { backgroundColor: colors.ambulance, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
   heroTitle: { color: colors.white, fontSize: font.h2, fontWeight: font.bold, marginTop: spacing.sm },
-  heroSub: { color: '#D5E5F5', fontSize: font.small, marginTop: 4, marginBottom: spacing.lg },
-  heroBtn: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  heroSub: { color: '#DCE8FE', fontSize: font.small, marginTop: 4, marginBottom: spacing.lg },
+  heroBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)', height: 48, borderRadius: radius.md },
+  heroBtnText: { color: colors.white, fontWeight: font.bold, fontSize: font.body },
   section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginBottom: spacing.md },
   card: { marginBottom: spacing.md },
   patient: { fontSize: font.body, fontWeight: font.bold, color: colors.text },

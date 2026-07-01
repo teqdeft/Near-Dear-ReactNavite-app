@@ -45,14 +45,14 @@ export default function PrescriptionsScreen() {
       data={items}
       keyExtractor={(i) => String(i.id)}
       ListHeaderComponent={
-        <AppButton title={uploading ? 'Uploading…' : '⬆️ Upload prescription'} color={colors.pharmacy}
+        <AppButton title={uploading ? 'Uploading…' : 'Upload prescription'} icon="upload" color={colors.pharmacy}
           loading={uploading} onPress={upload} style={{ marginBottom: spacing.lg }} />
       }
-      ListEmptyComponent={<EmptyState icon="📄" title="No prescriptions yet" subtitle="Upload a prescription to use it at checkout." />}
+      ListEmptyComponent={<EmptyState icon="prescription" title="No prescriptions yet" subtitle="Upload a prescription to use it at checkout." />}
       renderItem={({ item }) => (
         <Card style={styles.card}>
           <Row style={{ justifyContent: 'space-between' }}>
-            <Text style={styles.title}>📄 Prescription #{item.id}</Text>
+            <Text style={styles.title}>Prescription #{item.id}</Text>
             <Pill label={item.status.replace('_', ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
           </Row>
           {item.doctor_name ? <Muted style={{ marginTop: 4 }}>Dr. {item.doctor_name}</Muted> : null}

@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, EmptyState, Loader } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
 export default function MedicineListScreen({ route, navigation }) {
@@ -47,7 +48,7 @@ export default function MedicineListScreen({ route, navigation }) {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
-          <Text>🔍</Text>
+          <Icon name="search" size={20} color={colors.textMuted} />
           <TextInput style={styles.input} placeholder="Search medicines…" placeholderTextColor={colors.textMuted}
             value={search} onChangeText={setSearch} returnKeyType="search" onSubmitEditing={() => load(search)} />
         </View>
@@ -58,13 +59,13 @@ export default function MedicineListScreen({ route, navigation }) {
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 90, flexGrow: 1 }}
           data={items}
           keyExtractor={(i) => String(i.id)}
-          ListEmptyComponent={<EmptyState icon="💊" title="No medicines found" subtitle="Try a different search or category." />}
+          ListEmptyComponent={<EmptyState icon="pharmacy" title="No medicines found" subtitle="Try a different search or category." />}
           renderItem={({ item }) => (
             <Card style={styles.card} onPress={() => navigation.navigate('MedicineDetail', { id: item.id })}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.display_name}</Text>
                 <Muted>{[item.strength, item.form].filter(Boolean).join(' • ')}</Muted>
-                <Muted style={{ marginTop: 2 }}>🏪 {item.pharmacy_name}</Muted>
+                <Muted style={{ marginTop: 2 }}>{item.pharmacy_name}</Muted>
                 <Row style={{ marginTop: 8 }}>
                   <Text style={styles.price}>₹{Number(item.price).toFixed(0)}</Text>
                   {item.prescription_required ? <Pill label="Rx" color={colors.danger} style={{ marginLeft: 8 }} /> : null}
@@ -73,7 +74,7 @@ export default function MedicineListScreen({ route, navigation }) {
               </View>
               <TouchableOpacity style={[styles.addBtn, item.stock_status !== 'in_stock' && { opacity: 0.4 }]}
                 disabled={item.stock_status !== 'in_stock'} onPress={() => onAdd(item)}>
-                <Text style={styles.addText}>＋ Add</Text>
+                <Text style={styles.addText}>+ Add</Text>
               </TouchableOpacity>
             </Card>
           )}
@@ -82,7 +83,7 @@ export default function MedicineListScreen({ route, navigation }) {
 
       {count > 0 && (
         <TouchableOpacity style={styles.cartBar} onPress={() => navigation.navigate('Cart')} activeOpacity={0.9}>
-          <Text style={styles.cartText}>🛒  {count} item(s) in cart</Text>
+          <Text style={styles.cartText}>{count} item(s) in cart</Text>
           <Text style={styles.cartText}>View cart ›</Text>
         </TouchableOpacity>
       )}

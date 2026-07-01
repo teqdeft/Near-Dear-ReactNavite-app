@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { colors, spacing, font } from '../../theme';
 
 const FLOW = ['requested', 'assigned', 'accepted', 'on_the_way', 'picked_up', 'completed'];
@@ -44,16 +45,16 @@ export default function AmbulanceDetailScreen({ route }) {
           <Text style={styles.title}>{r.patient_name}</Text>
           <Pill label={r.status.replace(/_/g, ' ')} color={cancelled ? colors.danger : colors.ambulance} />
         </Row>
-        <Muted style={{ marginTop: spacing.sm }}>📍 Pickup: {r.pickup_address}</Muted>
-        <Muted>🏥 Drop: {r.drop_address}</Muted>
+        <Row style={{ marginTop: spacing.sm }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Pickup: {r.pickup_address}</Muted></Row>
+        <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Drop: {r.drop_address}</Muted></Row>
         <Pill label={`Type: ${r.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
 
         {r.driver_name && (
           <View style={styles.driver}>
-            <Text style={styles.driverTitle}>🚑 {r.vehicle_number || 'Assigned vehicle'}</Text>
+            <Row><Icon name="ambulance" size={18} color={colors.ambulance} /><Text style={styles.driverTitle}>  {r.vehicle_number || 'Assigned vehicle'}</Text></Row>
             <Muted>Driver: {r.driver_name}</Muted>
             {r.driver_mobile && (
-              <AppButton title={`📞 Call driver`} variant="outline" color={colors.success}
+              <AppButton title="Call driver" icon="phone" variant="outline" color={colors.success}
                 style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${r.driver_mobile}`)} />
             )}
           </View>

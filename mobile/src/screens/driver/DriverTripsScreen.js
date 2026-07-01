@@ -27,21 +27,21 @@ export default function DriverTripsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <Text style={styles.header}>My Trips</Text>
       <FlatList
-        contentContainerStyle={{ padding: spacing.lg, flexGrow: 1 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120, flexGrow: 1 }}
         data={items}
         keyExtractor={(i) => String(i.id)}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={<EmptyState icon="🚑" title="No trips yet" subtitle="Accepted requests show up here." />}
+        ListEmptyComponent={<EmptyState icon="ambulance" title="No trips yet" subtitle="Accepted requests show up here." />}
         renderItem={({ item }) => (
           <Card style={styles.card}>
             <Row style={{ justifyContent: 'space-between' }}>
               <Text style={styles.patient}>{item.patient_name}</Text>
               <Pill label={item.status.replace(/_/g, ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
             </Row>
-            <Muted style={{ marginTop: 6 }}>📍 {item.pickup_address}</Muted>
-            <Muted>🏥 {item.drop_address}</Muted>
+            <Muted style={{ marginTop: 6 }}>{item.pickup_address}</Muted>
+            <Muted>{item.drop_address}</Muted>
             {['accepted', 'on_the_way', 'picked_up'].includes(item.status) && (
-              <AppButton title={`📞 Call ${item.contact_mobile}`} variant="outline" color={colors.success}
+              <AppButton title={`Call ${item.contact_mobile}`} icon="phone" variant="outline" color={colors.success}
                 style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${item.contact_mobile}`)} />
             )}
           </Card>
