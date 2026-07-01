@@ -1,11 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import Icon from '../components/Icon';
 import GradientBackground from '../components/GradientBackground';
-import { colors, spacing, font, radius, shadow, gradients } from '../theme';
+import { colors, spacing, font, radius, shadow } from '../theme';
 
 function ArrowBadge({ color = colors.text, bg = colors.white }) {
   return (
@@ -60,16 +59,14 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.tagline}>Your health, one tap away. What do you need help with today?</Text>
 
           {/* Emergency card */}
-          <TouchableOpacity activeOpacity={0.92} onPress={() => navigation.navigate('BookAmbulance')}>
-            <LinearGradient colors={gradients.emergency} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.sos, shadow.card]}>
-              <View style={styles.sosIcon}><Icon name="ambulance" size={26} color={colors.white} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sosLabel}>EMERGENCY</Text>
-                <Text style={styles.sosTitle}>Need urgent help?</Text>
-                <Text style={styles.sosSub}>Book an ambulance in seconds</Text>
-              </View>
-              <ArrowBadge color={colors.blood} />
-            </LinearGradient>
+          <TouchableOpacity activeOpacity={0.92} onPress={() => navigation.navigate('BookAmbulance')} style={[styles.sos, shadow.card]}>
+            <View style={styles.sosIcon}><Icon name="ambulance" size={26} color={colors.white} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sosLabel}>EMERGENCY</Text>
+              <Text style={styles.sosTitle}>Need urgent help?</Text>
+              <Text style={styles.sosSub}>Book an ambulance in seconds</Text>
+            </View>
+            <ArrowBadge color={colors.blood} />
           </TouchableOpacity>
 
           {/* Services header */}
@@ -139,7 +136,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 40, fontWeight: font.bold, color: colors.primary, lineHeight: 44 },
   tagline: { color: colors.textMuted, fontSize: font.body, marginTop: spacing.md, marginBottom: spacing.xl, lineHeight: 21 },
 
-  sos: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing.lg },
+  sos: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing.lg, backgroundColor: colors.blood },
   sosIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
   sosLabel: { color: 'rgba(255,255,255,0.85)', fontSize: font.tiny, fontWeight: font.bold, letterSpacing: 1.2 },
   sosTitle: { color: colors.white, fontWeight: font.bold, fontSize: font.h3, marginTop: 2 },
