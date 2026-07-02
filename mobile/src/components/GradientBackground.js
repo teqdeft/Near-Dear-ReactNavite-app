@@ -1,24 +1,19 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { ImageBackground, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 
-/**
- * Soft "gradient" backdrop built with pure RN (no native gradient module):
- * a light base with two blurred-looking tinted blobs (green top-left, pink top-right).
- * Looks close to a diagonal pastel gradient and needs zero native code.
- */
+// Smooth gradient rendered from a bundled PNG — no native gradient module,
+// so it works everywhere with a simple reload.
+const BG = require('../assets/bg-gradient.png');
+
 export default function GradientBackground({ children, style }) {
   return (
-    <View style={[styles.fill, style]}>
-      <View pointerEvents="none" style={styles.blobGreen} />
-      <View pointerEvents="none" style={styles.blobPink} />
+    <ImageBackground source={BG} resizeMode="cover" style={[styles.fill, style]}>
       {children}
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
-  blobGreen: { position: 'absolute', top: -90, left: -70, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(22,163,74,0.12)' },
-  blobPink: { position: 'absolute', top: -60, right: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(239,68,68,0.09)' },
+  fill: { flex: 1, backgroundColor: colors.bg },
 });
