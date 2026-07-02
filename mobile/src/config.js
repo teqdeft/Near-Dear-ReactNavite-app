@@ -19,7 +19,7 @@
 const DEV_PORT = 4000;
 
 // Change this if you use the Wi-Fi/LAN alternative above.
-const API_HOST = 'localhost';
+const API_HOST = '192.168.1.2';
 
 export const API_BASE_URL = `http://${API_HOST}:${DEV_PORT}/api/v1`;
 

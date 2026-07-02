@@ -3,7 +3,7 @@
 NearDear is a healthcare-support app with three modules that open from a themed home screen:
 
 - 🩸 **Blood Donation** — become a donor, toggle availability, create blood requests, auto-match nearby donors, accept/decline, share contact only after acceptance.
-- 🚑 **Ambulance** — request transport (pickup → drop), admin assigns a driver/vehicle, live status timeline.
+- 🚑 **Ambulance** — request transport (pickup → drop), admin assigns a driver/vehicle, live status timeline, and **live map tracking** of the ambulance (REST short-polling) once the driver is on the way.
 - 💊 **Medicines** — browse pharmacy listings by category, search, add to cart, upload prescription where required, place & track orders.
 
 Plus: mobile **OTP login**, **Aadhaar KYC verification**, profile & addresses, notifications, and support tickets.
@@ -120,8 +120,72 @@ To switch on the real services, fill these into `backend/.env`:
 
 ### Optional / later phase
 - **Firebase Cloud Messaging** (push notifications) — blueprint Phase 7. The backend already records in-app notifications; FCM can be layered on without changing call sites.
-- **Google Maps API** — address picker / distance matching.
+- **Google Maps API** — **required for live ambulance tracking** (see the section below) and later for address picker / distance matching.
 - **AWS S3** — move private file storage off local disk for production.
+
+---
+
+## 🚑 Live Ambulance Tracking (REST short-polling)
+
+Once a driver marks a trip **"On the way"**, the driver app sends its GPS to the
+backend **every 5 seconds**, and the patient's app polls that position **every 5
+seconds** and animates the ambulance marker on a Google Map (smooth interpolation
+between updates — no laggy jumps). Tracking automatically stops when the trip is
+completed or cancelled.
+
+**How it works**
+- **Driver side** → `POST /api/v1/ambulance/driver/location` `{ requestId, latitude, longitude, bearing }`
+- **User side** → `GET /api/v1/ambulance/requests/:id/track` (returns the latest lat/lng/bearing + status)
+- Location is stored on the `ambulance_requests` table (`current_latitude`, `current_longitude`, `bearing`, `location_updated_at`).
+
+### What you need to provide & where
+
+| # | What | Where to put it | Needed for |
+|---|------|-----------------|------------|
+| 1 | **Google Maps API key** (enable **"Maps SDK for Android"** in Google Cloud) | `mobile/android/gradle.properties` → `GOOGLE_MAPS_API_KEY=YOUR_KEY` | Rendering the map. Without it the map area is gray; everything else still works. |
+| 2 | **Database migration** (adds the 4 tracking columns) | run `npm run migrate` in `backend/` | Storing/serving live coordinates. |
+| 3 | **Native rebuild** of the Android app | `cd mobile/android && ./gradlew.bat app:installDebug` | New native modules (`react-native-maps`, geolocation) get compiled in — a JS reload is **not** enough. |
+
+> Get the key at <https://console.cloud.google.com/> → APIs & Services → Credentials.
+> Enable **Maps SDK for Android** (and **Maps SDK for iOS** if you build iOS).
+> The key lives in `android/gradle.properties` and is injected into
+> `AndroidManifest.xml` via a Gradle `manifestPlaceholder` — you do **not** edit
+> the manifest by hand.
+
+### Step-by-step
+
+```bash
+# 1) Paste your key
+#    mobile/android/gradle.properties
+GOOGLE_MAPS_API_KEY=AIza...your_key...
+
+# 2) Backend: add the tracking columns
+cd backend
+npm run migrate
+
+# 3) Mobile: install deps (already in package.json) and rebuild natively
+cd ../mobile
+npm install
+cd android && ./gradlew.bat app:installDebug -PreactNativeDevServerPort=8081
+```
+
+**Permissions:** the driver app asks for **location permission** the first time a
+trip goes "On the way". `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` are
+already declared in `AndroidManifest.xml`.
+
+**New dependencies added:** `react-native-maps`, `@react-native-community/geolocation`
+(both New-Architecture compatible for RN 0.86).
+
+**MVP limitations**
+- **Foreground only** — GPS is shared while the driver app is open. True
+  background tracking (screen off) needs an Android foreground service or
+  `react-native-background-geolocation`.
+- **Pickup/drop pins** show only if the booking has coordinates. The booking form
+  currently captures addresses as text, so those pins may be hidden — the live
+  ambulance marker (from the driver's GPS) always works. Add a map/geocoding
+  picker later to plot pickup & drop.
+- **iOS** isn't wired yet: add location usage strings to `Info.plist`, the Maps
+  key in `AppDelegate`, then `pod install`.
 
 ---
 

@@ -19,6 +19,7 @@ router.get('/dashboard', pharmacyRole, c.dashboard);
 router.get('/medicines', pharmacyRole, c.listMyMedicines);
 router.post('/medicines', pharmacyRole, c.addMedicine);
 router.put('/medicines/:id', pharmacyRole, c.updateMedicine);
+router.post('/categories', pharmacyRole, c.addCategory);
 
 router.get('/orders', pharmacyRole, c.listOrders);
 router.get('/orders/:id', pharmacyRole, c.orderDetail);

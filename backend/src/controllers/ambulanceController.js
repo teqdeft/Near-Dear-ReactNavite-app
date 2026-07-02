@@ -159,6 +159,55 @@ const acceptRequest = asyncHandler(async (req, res) => {
   return ok(res, { contact_mobile: request.contact_mobile, patient_name: request.patient_name }, 'Accepted. Please call the user to coordinate pickup.');
 });
 
+// Statuses during which a trip is "live" and location tracking is allowed.
+const LIVE_STATUSES = [
+  AMBULANCE_STATUS.ACCEPTED,
+  AMBULANCE_STATUS.ON_THE_WAY,
+  AMBULANCE_STATUS.PICKED_UP,
+];
+
+// POST /ambulance/driver/location  { requestId, latitude, longitude, bearing }
+// The assigned driver pushes their current GPS position (short-polling, ~5s).
+const updateLocation = asyncHandler(async (req, res) => {
+  const { requestId, latitude, longitude, bearing } = req.body;
+  if (requestId == null || latitude == null || longitude == null) {
+    throw ApiError.badRequest('requestId, latitude and longitude are required');
+  }
+
+  const r = await db('ambulance_requests').where({ id: requestId }).first();
+  if (!r) throw ApiError.notFound('Request not found');
+  if (r.assigned_driver_id !== req.user.id) throw ApiError.forbidden('This trip is not assigned to you');
+  if (!LIVE_STATUSES.includes(r.status)) throw ApiError.badRequest('Trip is not active');
+
+  await db('ambulance_requests').where({ id: requestId }).update({
+    current_latitude: latitude,
+    current_longitude: longitude,
+    bearing: bearing == null ? null : bearing,
+    location_updated_at: db.fn.now(),
+  });
+  return ok(res, null, 'Location updated');
+});
+
+// GET /ambulance/requests/:id/track
+// Lightweight payload the user's map polls every ~5s.
+const trackRequest = asyncHandler(async (req, res) => {
+  const r = await db('ambulance_requests as r')
+    .leftJoin('users as d', 'd.id', 'r.assigned_driver_id')
+    .where('r.id', req.params.id)
+    .select(
+      'r.id', 'r.status', 'r.user_id', 'r.assigned_driver_id',
+      'r.pickup_latitude', 'r.pickup_longitude', 'r.drop_latitude', 'r.drop_longitude',
+      'r.current_latitude', 'r.current_longitude', 'r.bearing', 'r.location_updated_at',
+      'd.name as driver_name', 'd.mobile as driver_mobile',
+    )
+    .first();
+  if (!r) throw ApiError.notFound('Request not found');
+  if (r.user_id !== req.user.id && req.user.role !== ROLES.ADMIN && r.assigned_driver_id !== req.user.id) {
+    throw ApiError.forbidden();
+  }
+  return ok(res, r);
+});
+
 // PUT /ambulance/requests/:id/status  { status }  (driver or admin)
 const updateStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
@@ -182,4 +231,5 @@ const updateStatus = asyncHandler(async (req, res) => {
 module.exports = {
   createRequest, myRequests, requestDetail, cancelRequest,
   driverRequests, driverAvailable, acceptRequest, updateStatus,
+  updateLocation, trackRequest,
 };

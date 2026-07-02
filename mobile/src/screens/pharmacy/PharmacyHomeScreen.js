@@ -52,6 +52,10 @@ export default function PharmacyHomeScreen({ navigation }) {
             <Text style={styles.catName}>{c.name}</Text>
           </TouchableOpacity>
         ))}
+        {/* Fill the last row so space-between doesn't spread a lone pair to the edges. */}
+        {Array.from({ length: (3 - (categories.length % 3)) % 3 }).map((_, i) => (
+          <View key={`spacer-${i}`} style={styles.catSpacer} />
+        ))}
       </View>
 
       <Card style={styles.cartCta} onPress={() => navigation.navigate('Cart')}>
@@ -82,6 +86,7 @@ const styles = StyleSheet.create({
   link: { color: colors.primary, fontWeight: font.semibold },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   cat: { width: '31%', backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center', marginBottom: spacing.md, ...shadow.soft },
+  catSpacer: { width: '31%' },
   catName: { fontSize: font.tiny, color: colors.text, textAlign: 'center', marginTop: 8, fontWeight: font.medium, paddingHorizontal: 4 },
   cartCta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm },
   cartTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },

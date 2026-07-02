@@ -46,6 +46,9 @@ export const AmbulanceApi = {
   driverAvailable: () => data(client.get('/ambulance/driver/available')),
   accept: (id) => data(client.post(`/ambulance/requests/${id}/accept`)),
   updateStatus: (id, status) => data(client.put(`/ambulance/requests/${id}/status`, { status })),
+  // Live tracking
+  track: (id) => data(client.get(`/ambulance/requests/${id}/track`)),
+  updateLocation: (payload) => full(client.post('/ambulance/driver/location', payload)),
 };
 
 export const CatalogApi = {

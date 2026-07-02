@@ -1,11 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
 import Icon from '../../components/Icon';
+import LiveTrackingMap from '../../components/LiveTrackingMap';
 import { colors, spacing, font } from '../../theme';
+
+// Statuses during which the ambulance is moving and worth live-tracking.
+const TRACKABLE = ['on_the_way', 'picked_up'];
 
 const FLOW = ['requested', 'assigned', 'accepted', 'on_the_way', 'picked_up', 'completed'];
 const LABELS = {
@@ -16,12 +20,33 @@ const LABELS = {
 export default function AmbulanceDetailScreen({ route }) {
   const { id } = route.params;
   const [r, setR] = useState(null);
+  const [live, setLive] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try { setR(await AmbulanceApi.requestDetail(id)); } catch (e) { Alert.alert('Error', errMessage(e)); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const status = r?.status;
+  const isTrackable = TRACKABLE.includes(status);
+
+  // Poll the driver's live GPS every 5s while the ambulance is moving.
+  useFocusEffect(useCallback(() => {
+    if (!isTrackable) { setLive(null); return undefined; }
+    let active = true;
+    const poll = async () => {
+      try { const t = await AmbulanceApi.track(id); if (active) setLive(t); } catch { /* keep last position */ }
+    };
+    poll();
+    const timer = setInterval(poll, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [isTrackable, id]));
+
+  // When the trip advances/ends (e.g. picked_up → completed), refresh the timeline.
+  useEffect(() => {
+    if (live?.status && status && live.status !== status) load();
+  }, [live?.status, status, load]);
 
   if (!r) return <Loader />;
 
@@ -60,6 +85,21 @@ export default function AmbulanceDetailScreen({ route }) {
           </View>
         )}
       </Card>
+
+      {isTrackable && (
+        <View style={{ marginTop: spacing.lg }}>
+          <LiveTrackingMap
+            latitude={live?.current_latitude}
+            longitude={live?.current_longitude}
+            bearing={live?.bearing}
+            pickup={{ lat: r.pickup_latitude, lng: r.pickup_longitude }}
+            drop={{ lat: r.drop_latitude, lng: r.drop_longitude }}
+          />
+          <Muted style={{ marginTop: 6, textAlign: 'center' }}>
+            {live?.current_latitude ? 'Live location · updates every few seconds' : 'Locating the ambulance…'}
+          </Muted>
+        </View>
+      )}
 
       {!cancelled && (
         <Card style={{ marginTop: spacing.lg }}>

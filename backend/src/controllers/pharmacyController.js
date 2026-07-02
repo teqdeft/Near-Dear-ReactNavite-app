@@ -6,7 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const {
   ROLES, PHARMACY_APPROVAL, DOC_TYPE, DOC_STATUS, ORDER_STATUS,
-  PRESCRIPTION_STATUS, NOTIFICATION_TYPE,
+  PRESCRIPTION_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, MEDICINE_FORM,
 } = require('../constants/enums');
 
 function fileUrl(filePath) {
@@ -123,8 +123,9 @@ const listMyMedicines = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
   const rows = await db('pharmacy_medicines as pm')
     .leftJoin('medicines as m', 'm.id', 'pm.medicine_id')
+    .leftJoin('medicine_categories as c', 'c.id', 'pm.category_id')
     .where('pm.pharmacy_id', pharmacy.id)
-    .select('pm.*', 'm.name as master_name', 'm.strength', 'm.form')
+    .select('pm.*', 'm.name as master_name', 'm.brand_name', 'm.composition', 'm.strength', 'm.form', 'c.name as category_name')
     .orderBy('pm.id', 'desc');
   return ok(res, rows);
 });
@@ -136,18 +137,70 @@ const addMedicine = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Your pharmacy must be approved before listing medicines');
   }
   const b = req.body;
-  if (!b.medicine_id && !b.custom_name) {
-    throw ApiError.badRequest('Provide either medicine_id or custom_name');
+  const name = (b.custom_name || '').trim();
+  if (!b.medicine_id && !name) {
+    throw ApiError.badRequest('Provide either medicine_id or a medicine name');
   }
+
+  // Reject a listing this pharmacy already carries — matched against both the
+  // linked master medicine's name and any legacy custom_name — so the
+  // catalogue stays free of dupes.
+  const dupQuery = db('pharmacy_medicines as pm')
+    .leftJoin('medicines as m', 'm.id', 'pm.medicine_id')
+    .where('pm.pharmacy_id', pharmacy.id);
+  if (b.medicine_id) {
+    dupQuery.andWhere('pm.medicine_id', b.medicine_id);
+  } else {
+    dupQuery.andWhere((q) => {
+      q.whereRaw('LOWER(pm.custom_name) = LOWER(?)', [name])
+        .orWhereRaw('LOWER(m.name) = LOWER(?)', [name]);
+    });
+  }
+  const duplicate = await dupQuery.first();
+  if (duplicate) throw ApiError.conflict('This medicine is already in your listings');
+
+  // Resolve the master medicine. Custom entries get a master row so their
+  // composition/strength/form live in `medicines` (shared, normalized) rather
+  // than being lost — reusing an identical existing master when one exists.
+  const categoryId = b.category_id || null;
+  const rxRequired = Boolean(b.prescription_required);
+  let medicineId = b.medicine_id || null;
+
+  if (!medicineId) {
+    const strength = (b.strength || '').trim() || null;
+    const form = b.form || MEDICINE_FORM.TABLET;
+    const existingMaster = await db('medicines')
+      .whereRaw('LOWER(name) = LOWER(?)', [name])
+      .andWhere((q) => (strength ? q.where('strength', strength) : q.whereNull('strength')))
+      .andWhere('form', form)
+      .first();
+
+    if (existingMaster) {
+      medicineId = existingMaster.id;
+    } else {
+      [medicineId] = await db('medicines').insert({
+        category_id: categoryId,
+        name,
+        brand_name: (b.brand_name || '').trim() || null,
+        composition: (b.composition || '').trim() || null,
+        strength,
+        form,
+        prescription_required: rxRequired,
+        status: ACTIVE_STATUS.ACTIVE,
+      });
+    }
+  }
+
   const [id] = await db('pharmacy_medicines').insert({
     pharmacy_id: pharmacy.id,
-    medicine_id: b.medicine_id || null,
-    custom_name: b.custom_name || null,
+    medicine_id: medicineId,
+    custom_name: null,
+    category_id: categoryId,
     price: b.price,
     mrp: b.mrp,
     stock_status: b.stock_status || 'in_stock',
     quantity_available: b.quantity_available,
-    prescription_required: Boolean(b.prescription_required),
+    prescription_required: rxRequired,
     status: b.status || 'active',
   });
   const row = await db('pharmacy_medicines').where({ id }).first();
@@ -159,11 +212,76 @@ const updateMedicine = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
   const row = await db('pharmacy_medicines').where({ id: req.params.id, pharmacy_id: pharmacy.id }).first();
   if (!row) throw ApiError.notFound('Listing not found');
-  const allowed = ['custom_name', 'price', 'mrp', 'stock_status', 'quantity_available', 'prescription_required', 'status'];
-  const update = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  const b = req.body;
+
+  // Listing-level fields live on pharmacy_medicines.
+  const listingAllowed = ['category_id', 'price', 'mrp', 'stock_status', 'quantity_available', 'prescription_required', 'status'];
+  const update = Object.fromEntries(Object.entries(b).filter(([k]) => listingAllowed.includes(k)));
+
+  // Master-level fields (name/brand/composition/strength/form) live on the
+  // shared `medicines` row. Build the patch only from keys the client sent.
+  const masterFields = { name: 'name', brand_name: 'brand_name', composition: 'composition', strength: 'strength', form: 'form' };
+  const masterPatch = {};
+  for (const [payloadKey, col] of Object.entries(masterFields)) {
+    if (b[payloadKey] !== undefined) {
+      const v = typeof b[payloadKey] === 'string' ? b[payloadKey].trim() : b[payloadKey];
+      masterPatch[col] = v === '' ? null : v;
+    }
+  }
+  if (b.prescription_required !== undefined) masterPatch.prescription_required = Boolean(b.prescription_required);
+  if (masterPatch.name === null) delete masterPatch.name; // never blank out the name
+
+  if (Object.keys(masterPatch).length) {
+    if (!row.medicine_id) {
+      // Legacy custom listing (no master yet): create one and link it.
+      const [medId] = await db('medicines').insert({
+        category_id: update.category_id ?? row.category_id ?? null,
+        name: masterPatch.name || row.custom_name,
+        brand_name: masterPatch.brand_name ?? null,
+        composition: masterPatch.composition ?? null,
+        strength: masterPatch.strength ?? null,
+        form: masterPatch.form || MEDICINE_FORM.TABLET,
+        prescription_required: masterPatch.prescription_required ?? Boolean(row.prescription_required),
+        status: ACTIVE_STATUS.ACTIVE,
+      });
+      update.medicine_id = medId;
+      update.custom_name = null;
+    } else {
+      const [{ c: refCount }] = await db('pharmacy_medicines')
+        .where({ medicine_id: row.medicine_id }).count('* as c');
+      if (Number(refCount) > 1) {
+        // Master is shared with other pharmacies — fork a private copy so this
+        // edit doesn't rewrite their listings, then relink.
+        const master = await db('medicines').where({ id: row.medicine_id }).first();
+        const { id, created_at, updated_at, ...clone } = master;
+        const [medId] = await db('medicines').insert({ ...clone, ...masterPatch });
+        update.medicine_id = medId;
+      } else {
+        await db('medicines').where({ id: row.medicine_id }).update(masterPatch);
+      }
+    }
+  }
+
   if (Object.keys(update).length) await db('pharmacy_medicines').where({ id: row.id }).update(update);
   const updated = await db('pharmacy_medicines').where({ id: row.id }).first();
   return ok(res, updated, 'Listing updated');
+});
+
+// POST /pharmacy/categories  — owner adds a category on the fly while listing.
+// Idempotent on slug: an existing category with the same slug is reused.
+const addCategory = asyncHandler(async (req, res) => {
+  const name = (req.body.name || '').trim();
+  if (!name) throw ApiError.badRequest('Category name is required');
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const existing = await db('medicine_categories').where({ slug }).first();
+  if (existing) return ok(res, existing, 'Category already exists');
+
+  const [id] = await db('medicine_categories').insert({
+    name, slug, status: ACTIVE_STATUS.ACTIVE,
+  });
+  const category = await db('medicine_categories').where({ id }).first();
+  return created(res, category, 'Category added');
 });
 
 // ---- Order management -------------------------------------------------
@@ -243,6 +361,6 @@ const reviewPrescription = asyncHandler(async (req, res) => {
 
 module.exports = {
   register, myPharmacy, uploadDocument, dashboard,
-  listMyMedicines, addMedicine, updateMedicine,
+  listMyMedicines, addMedicine, updateMedicine, addCategory,
   listOrders, orderDetail, updateOrderStatus, reviewPrescription,
 };

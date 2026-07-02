@@ -5,6 +5,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
+import useDriverLocationTracker from '../../hooks/useDriverLocationTracker';
+import DriverTripMap from '../../components/DriverTripMap';
 import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { colors, spacing, font, radius, shadow } from '../../theme';
@@ -51,6 +53,11 @@ export default function DriverDashboardScreen() {
   };
 
   const activeTrips = mine.filter((m) => ACTIVE.includes(m.status));
+
+  // Auto-share GPS while a trip is moving (on the way / picked up).
+  const trackingTrip = mine.find((m) => ['on_the_way', 'picked_up'].includes(m.status));
+  useDriverLocationTracker(trackingTrip?.id, !!trackingTrip);
+
   if (available === null) return <Loader />;
 
   return (
@@ -79,6 +86,8 @@ export default function DriverDashboardScreen() {
                 </Row>
                 <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{t.pickup_address}</Muted></Row>
                 <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{t.drop_address}</Muted></Row>
+                {/* User's pickup location on the map + turn-by-turn navigation. */}
+                <DriverTripMap pickup={{ lat: t.pickup_latitude, lng: t.pickup_longitude }} />
                 <Row style={{ marginTop: spacing.md }}>
                   <AppButton title="Call" icon="phone" variant="outline" color={colors.success} style={{ flex: 1, marginRight: spacing.sm }} onPress={() => Linking.openURL(`tel:${t.contact_mobile}`)} />
                   {NEXT[t.status] ? <AppButton title={NEXT_LABEL[t.status]} color={colors.ambulance} loading={busyId === t.id} style={{ flex: 1.4 }} onPress={() => advance(t)} /> : null}

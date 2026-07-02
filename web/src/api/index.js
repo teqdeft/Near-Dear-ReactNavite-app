@@ -18,6 +18,7 @@ export const PharmacyApi = {
   medicines: () => data(client.get('/pharmacy/medicines')),
   addMedicine: (payload) => data(client.post('/pharmacy/medicines', payload)),
   updateMedicine: (id, payload) => data(client.put(`/pharmacy/medicines/${id}`, payload)),
+  addCategory: (name) => data(client.post('/pharmacy/categories', { name })),
   orders: (status) => data(client.get('/pharmacy/orders', { params: status ? { status } : {} })),
   orderDetail: (id) => data(client.get(`/pharmacy/orders/${id}`)),
   updateOrderStatus: (id, status, reason) => data(client.put(`/pharmacy/orders/${id}/status`, { status, reason })),

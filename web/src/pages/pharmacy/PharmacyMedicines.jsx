@@ -1,44 +1,71 @@
 import { useState } from 'react';
-import { PharmacyApi } from '../../api';
+import { PharmacyApi, CatalogApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, Button, Badge, Loader, Modal, money } from '../../components/UI';
 
 export default function PharmacyMedicines() {
   const { data, loading, reload } = useAsync(() => PharmacyApi.medicines());
+  const { data: catData, reload: reloadCategories } = useAsync(() => CatalogApi.categories());
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   if (loading) return <Loader />;
   const rows = data || [];
+  const categories = catData || [];
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((m) => {
+        const name = (m.master_name || m.custom_name || '').toLowerCase();
+        const strength = (m.strength || '').toLowerCase();
+        const category = (m.category_name || '').toLowerCase();
+        return name.includes(q) || strength.includes(q) || category.includes(q);
+      })
+    : rows;
 
   return (
     <>
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Your medicine listings</div>
         <div className="spacer" />
+        <input
+          className="input"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="🔍 Search by name or category…"
+          style={{ maxWidth: 260 }}
+          disabled={rows.length === 0}
+        />
         <Button onClick={() => setOpen(true)}>＋ Add medicine</Button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
-          <thead><tr><th>Medicine</th><th>Price</th><th>MRP</th><th>Stock</th><th>Rx</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Medicine</th><th>Category</th><th>Price</th><th>MRP</th><th>Qty</th><th>Stock</th><th>Rx</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={7} className="muted" style={{ padding: 24 }}>No medicines listed yet. Click “Add medicine”.</td></tr>
-            ) : rows.map((m) => <MedicineRow key={m.id} m={m} onChange={reload} />)}
+              <tr><td colSpan={9} className="muted" style={{ padding: 24 }}>No medicines listed yet. Click “Add medicine”.</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={9} className="muted" style={{ padding: 24 }}>No medicines match “{query}”.</td></tr>
+            ) : filtered.map((m) => (
+              <MedicineRow key={m.id} m={m} categories={categories} onReloadCategories={reloadCategories} onChange={reload} />
+            ))}
           </tbody>
         </table>
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Add medicine">
-        <AddMedicine onDone={() => { setOpen(false); reload(); }} />
+        <AddMedicine categories={categories} onReloadCategories={reloadCategories} onDone={() => { setOpen(false); reload(); }} />
       </Modal>
     </>
   );
 }
 
-function MedicineRow({ m, onChange }) {
+function MedicineRow({ m, categories, onReloadCategories, onChange }) {
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const name = m.master_name || m.custom_name;
 
   const toggleStock = async () => {
@@ -59,21 +86,79 @@ function MedicineRow({ m, onChange }) {
   return (
     <tr>
       <td><b>{name}</b>{m.strength ? <span className="muted"> • {m.strength}</span> : ''}</td>
+      <td className="muted">{m.category_name || '—'}</td>
       <td>{money(m.price)}</td>
       <td className="muted">{m.mrp ? money(m.mrp) : '—'}</td>
+      <td className="muted">{m.quantity_available ?? '—'}</td>
       <td><Badge value={m.stock_status} /></td>
       <td>{m.prescription_required ? <span className="badge red">Rx</span> : <span className="muted">No</span>}</td>
       <td><Badge value={m.status} /></td>
       <td style={{ whiteSpace: 'nowrap' }}>
+        <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>{' '}
         <Button size="sm" variant="outline" onClick={toggleStock} loading={busy}>{m.stock_status === 'in_stock' ? 'Mark out' : 'Mark in'}</Button>{' '}
         <Button size="sm" variant="ghost" onClick={toggleActive} loading={busy}>{m.status === 'active' ? 'Disable' : 'Enable'}</Button>
+        <Modal open={editing} onClose={() => setEditing(false)} title={`Edit — ${name}`}>
+          <EditMedicine m={m} categories={categories} onReloadCategories={onReloadCategories} onDone={() => { setEditing(false); onChange(); }} />
+        </Modal>
       </td>
     </tr>
   );
 }
 
-function AddMedicine({ onDone }) {
-  const [form, setForm] = useState({ custom_name: '', price: '', mrp: '', prescription_required: false, stock_status: 'in_stock' });
+// Reusable category picker with an inline "add new category" flow.
+function CategoryField({ value, onChange, categories, onReloadCategories }) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const create = async () => {
+    if (!newName.trim()) return setError('Enter a category name.');
+    setBusy(true); setError('');
+    try {
+      const cat = await PharmacyApi.addCategory(newName.trim());
+      await onReloadCategories();
+      onChange(String(cat.id));
+      setAdding(false); setNewName('');
+    } catch (e) { setError(errMessage(e)); }
+    finally { setBusy(false); }
+  };
+
+  if (adding) {
+    return (
+      <div className="field">
+        <label>New category</label>
+        {error && <div className="alert error" style={{ marginBottom: 8 }}>{error}</div>}
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Ayurvedic" autoFocus />
+          <Button type="button" onClick={create} loading={busy}>Save</Button>
+          <Button type="button" variant="ghost" onClick={() => { setAdding(false); setError(''); }}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="field">
+      <label>Category</label>
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <select className="select" value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">— No category —</option>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <Button type="button" variant="outline" onClick={() => setAdding(true)}>＋ New</Button>
+      </div>
+    </div>
+  );
+}
+
+const FORMS = ['tablet', 'syrup', 'injection', 'capsule', 'drops', 'cream', 'other'];
+
+function AddMedicine({ categories, onReloadCategories, onDone }) {
+  const [form, setForm] = useState({
+    custom_name: '', brand_name: '', composition: '', strength: '', form: 'tablet',
+    category_id: '', price: '', mrp: '', quantity_available: '', prescription_required: false, stock_status: 'in_stock',
+  });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -84,8 +169,17 @@ function AddMedicine({ onDone }) {
     setBusy(true); setError('');
     try {
       await PharmacyApi.addMedicine({
-        custom_name: form.custom_name, price: Number(form.price), mrp: form.mrp ? Number(form.mrp) : undefined,
-        prescription_required: form.prescription_required, stock_status: form.stock_status,
+        custom_name: form.custom_name,
+        brand_name: form.brand_name || undefined,
+        composition: form.composition || undefined,
+        strength: form.strength || undefined,
+        form: form.form,
+        category_id: form.category_id ? Number(form.category_id) : undefined,
+        price: Number(form.price),
+        mrp: form.mrp ? Number(form.mrp) : undefined,
+        quantity_available: form.quantity_available ? Number(form.quantity_available) : undefined,
+        prescription_required: form.prescription_required,
+        stock_status: form.stock_status,
       });
       onDone();
     } catch (err) { setError(errMessage(err)); }
@@ -95,10 +189,23 @@ function AddMedicine({ onDone }) {
   return (
     <form onSubmit={submit}>
       {error && <div className="alert error">{error}</div>}
-      <Input label="Medicine name *" value={form.custom_name} onChange={(e) => set('custom_name', e.target.value)} placeholder="e.g. Paracetamol 500mg" />
+      <Input label="Medicine name *" value={form.custom_name} onChange={(e) => set('custom_name', e.target.value)} placeholder="e.g. Paracetamol" />
+      <div className="row">
+        <Input label="Brand name" value={form.brand_name} onChange={(e) => set('brand_name', e.target.value)} placeholder="e.g. Calpol" />
+        <Input label="Strength" value={form.strength} onChange={(e) => set('strength', e.target.value)} placeholder="e.g. 500mg" />
+        <div className="field">
+          <label>Form</label>
+          <select className="select" value={form.form} onChange={(e) => set('form', e.target.value)}>
+            {FORMS.map((f) => <option key={f} value={f}>{f[0].toUpperCase() + f.slice(1)}</option>)}
+          </select>
+        </div>
+      </div>
+      <Input label="Composition" value={form.composition} onChange={(e) => set('composition', e.target.value)} placeholder="e.g. Paracetamol 500mg" />
+      <CategoryField value={form.category_id} onChange={(v) => set('category_id', v)} categories={categories} onReloadCategories={onReloadCategories} />
       <div className="row">
         <Input label="Price (₹) *" type="number" value={form.price} onChange={(e) => set('price', e.target.value)} />
         <Input label="MRP (₹)" type="number" value={form.mrp} onChange={(e) => set('mrp', e.target.value)} />
+        <Input label="Quantity" type="number" value={form.quantity_available} onChange={(e) => set('quantity_available', e.target.value)} />
       </div>
       <div className="row" style={{ alignItems: 'center' }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -113,6 +220,75 @@ function AddMedicine({ onDone }) {
         </div>
       </div>
       <Button type="submit" loading={busy} className="block">Add medicine</Button>
+    </form>
+  );
+}
+
+function EditMedicine({ m, categories, onReloadCategories, onDone }) {
+  const [form, setForm] = useState({
+    name: m.master_name || m.custom_name || '',
+    brand_name: m.brand_name || '',
+    composition: m.composition || '',
+    strength: m.strength || '',
+    form: m.form || 'tablet',
+    price: String(m.price ?? ''),
+    mrp: m.mrp != null ? String(m.mrp) : '',
+    quantity_available: m.quantity_available != null ? String(m.quantity_available) : '',
+    category_id: m.category_id ? String(m.category_id) : '',
+    prescription_required: !!m.prescription_required,
+  });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.price) return setError('Name and price are required.');
+    setBusy(true); setError('');
+    try {
+      await PharmacyApi.updateMedicine(m.id, {
+        name: form.name,
+        brand_name: form.brand_name,
+        composition: form.composition,
+        strength: form.strength,
+        form: form.form,
+        price: Number(form.price),
+        mrp: form.mrp ? Number(form.mrp) : null,
+        quantity_available: form.quantity_available ? Number(form.quantity_available) : null,
+        category_id: form.category_id ? Number(form.category_id) : null,
+        prescription_required: form.prescription_required,
+      });
+      onDone();
+    } catch (err) { setError(errMessage(err)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <form onSubmit={submit}>
+      {error && <div className="alert error">{error}</div>}
+      <Input label="Medicine name *" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Paracetamol" />
+      <div className="row">
+        <Input label="Brand name" value={form.brand_name} onChange={(e) => set('brand_name', e.target.value)} placeholder="e.g. Calpol" />
+        <Input label="Strength" value={form.strength} onChange={(e) => set('strength', e.target.value)} placeholder="e.g. 500mg" />
+        <div className="field">
+          <label>Form</label>
+          <select className="select" value={form.form} onChange={(e) => set('form', e.target.value)}>
+            {FORMS.map((f) => <option key={f} value={f}>{f[0].toUpperCase() + f.slice(1)}</option>)}
+          </select>
+        </div>
+      </div>
+      <Input label="Composition" value={form.composition} onChange={(e) => set('composition', e.target.value)} placeholder="e.g. Paracetamol 500mg" />
+      <CategoryField value={form.category_id} onChange={(v) => set('category_id', v)} categories={categories} onReloadCategories={onReloadCategories} />
+      <div className="row">
+        <Input label="Price (₹) *" type="number" value={form.price} onChange={(e) => set('price', e.target.value)} />
+        <Input label="MRP (₹)" type="number" value={form.mrp} onChange={(e) => set('mrp', e.target.value)} />
+        <Input label="Quantity" type="number" value={form.quantity_available} onChange={(e) => set('quantity_available', e.target.value)} />
+      </div>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <input type="checkbox" checked={form.prescription_required} onChange={(e) => set('prescription_required', e.target.checked)} />
+        Prescription required
+      </label>
+      <Button type="submit" loading={busy} className="block">Save changes</Button>
     </form>
   );
 }

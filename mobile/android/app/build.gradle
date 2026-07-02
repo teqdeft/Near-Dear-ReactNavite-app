@@ -87,6 +87,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Google Maps key injected into AndroidManifest. Set GOOGLE_MAPS_API_KEY
+        // in android/gradle.properties (empty string keeps debug builds compiling).
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: (project.findProperty("GOOGLE_MAPS_API_KEY") ?: "")]
     }
     signingConfigs {
         debug {

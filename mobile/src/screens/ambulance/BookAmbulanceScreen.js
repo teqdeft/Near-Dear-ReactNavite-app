@@ -4,6 +4,7 @@ import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
+import LocationPicker from '../../components/LocationPicker';
 import { colors, spacing } from '../../theme';
 
 const TYPES = [
@@ -18,6 +19,7 @@ export default function BookAmbulanceScreen({ navigation }) {
   const [form, setForm] = useState({
     patient_name: user?.name || '', contact_mobile: user?.mobile || '',
     pickup_address: '', drop_address: '', city: user?.city || '', ambulance_type: 'any', notes: '',
+    pickup_latitude: null, pickup_longitude: null,
   });
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -46,6 +48,13 @@ export default function BookAmbulanceScreen({ navigation }) {
 
       <SectionTitle style={{ marginTop: spacing.md }}>Trip</SectionTitle>
       <TextField label="Pickup address *" value={form.pickup_address} onChangeText={(v) => set('pickup_address', v)} multiline />
+      <Text style={styles.label}>
+        Pin pickup on map {form.pickup_latitude ? '✓' : '(so the driver can navigate to you)'}
+      </Text>
+      <LocationPicker
+        value={form.pickup_latitude != null ? { latitude: Number(form.pickup_latitude), longitude: Number(form.pickup_longitude) } : null}
+        onChange={(c) => setForm((f) => ({ ...f, pickup_latitude: c.latitude, pickup_longitude: c.longitude }))}
+      />
       <TextField label="Drop / hospital address *" value={form.drop_address} onChangeText={(v) => set('drop_address', v)} multiline />
       <TextField label="City *" placeholder="Used to find nearby drivers" value={form.city} onChangeText={(v) => set('city', v)} />
 

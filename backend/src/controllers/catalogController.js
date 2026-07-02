@@ -23,10 +23,15 @@ const medicines = asyncHandler(async (req, res) => {
       'pm.id', 'pm.price', 'pm.mrp', 'pm.stock_status', 'pm.prescription_required',
       'pm.pharmacy_id', 'ph.pharmacy_name', 'ph.city as pharmacy_city',
       'pm.medicine_id', 'pm.custom_name',
-      'm.name as medicine_name', 'm.brand_name', 'm.strength', 'm.form', 'm.image_url', 'm.category_id'
+      'm.name as medicine_name', 'm.brand_name', 'm.strength', 'm.form', 'm.image_url',
+      db.raw('COALESCE(pm.category_id, m.category_id) as category_id')
     );
 
-  if (category_id) q.andWhere('m.category_id', category_id);
+  // The pharmacy's own listing category wins; the master medicine's category
+  // is the fallback (e.g. seeded listings without an explicit override).
+  if (category_id) {
+    q.andWhereRaw('COALESCE(pm.category_id, m.category_id) = ?', [category_id]);
+  }
   if (city) q.andWhereRaw('LOWER(ph.city) = LOWER(?)', [city]);
   if (search) {
     q.andWhere((b) => {
