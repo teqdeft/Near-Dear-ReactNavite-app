@@ -1,10 +1,12 @@
 import { AdminApi } from '../../api';
+import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Badge, Loader, money } from '../../components/UI';
+import { Badge, Loader, ErrorState, money } from '../../components/UI';
 
 export default function AdminOrders() {
-  const { data, loading } = useAsync(() => AdminApi.orders());
+  const { data, loading, error, reload } = useAsync(() => AdminApi.orders());
   if (loading) return <Loader />;
+  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
 
   return (

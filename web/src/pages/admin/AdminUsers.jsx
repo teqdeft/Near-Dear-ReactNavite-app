@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Button, Badge, Loader } from '../../components/UI';
+import { Button, Badge, Loader, ErrorState } from '../../components/UI';
 
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const { data, loading, reload } = useAsync(() => AdminApi.users({ search: query || undefined, limit: 50 }), [query]);
+  const { data, loading, error, reload } = useAsync(() => AdminApi.users({ search: query || undefined, limit: 50 }), [query]);
   const [busyId, setBusyId] = useState(null);
 
   const toggle = async (u) => {
@@ -29,7 +29,7 @@ export default function AdminUsers() {
       </div>
 
       <div className="card" style={{ padding: 0 }}>
-        {loading ? <Loader /> : (
+        {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
           <table className="table">
             <thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>KYC</th><th>Status</th><th></th></tr></thead>
             <tbody>

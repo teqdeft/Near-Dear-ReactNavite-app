@@ -15,10 +15,14 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 import OtpScreen from '../screens/auth/OtpScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import AadhaarVerifyScreen from '../screens/auth/AadhaarVerifyScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
+import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
 
 // Driver
 import DriverDashboardScreen from '../screens/driver/DriverDashboardScreen';
 import DriverTripsScreen from '../screens/driver/DriverTripsScreen';
+import DriverVehicleScreen from '../screens/driver/DriverVehicleScreen';
 
 // Tabs
 import HomeScreen from '../screens/HomeScreen';
@@ -99,6 +103,8 @@ export default function RootNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Create account' }} />
           <Stack.Screen name="Otp" component={OtpScreen} options={{ title: 'Verify OTP' }} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot password' }} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset password' }} />
         </>
       ) : !profileComplete ? (
         <>
@@ -108,12 +114,15 @@ export default function RootNavigator() {
       ) : isDriver ? (
         <>
           <Stack.Screen name="Main" component={DriverTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} options={{ title: 'My Ambulance' }} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change password' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
           <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
         </>
       ) : (
         <>
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change password' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
 
           {/* Blood module */}

@@ -11,6 +11,9 @@ const LEN = 6;
 export default function OtpScreen({ route }) {
   const { mode = 'register', payload, devCode } = route.params || {};
   const mobile = payload?.mobile || route.params?.mobile;
+  const email = payload?.email;
+  const channel = route.params?.channel || payload?.channel || 'sms';
+  const destinationLabel = channel === 'email' ? email : `+91 ${mobile}`;
   const { completeLogin, register } = useAuth();
   const [digits, setDigits] = useState(Array(LEN).fill(''));
   const [loading, setLoading] = useState(false);
@@ -62,7 +65,7 @@ export default function OtpScreen({ route }) {
 
   const resend = async () => {
     try {
-      await AuthApi.requestOtp(mobile);
+      await AuthApi.requestOtp({ mobile, email, channel });
       setSeconds(30);
       Alert.alert('OTP sent', 'A new code has been sent.');
     } catch (e) {
@@ -74,7 +77,7 @@ export default function OtpScreen({ route }) {
     <Screen scroll>
       <Text style={styles.title}>Enter the 6-digit code</Text>
       <Muted style={{ marginBottom: spacing.xl }}>
-        Sent to +91 {mobile}
+        Sent to {destinationLabel}
         {devCode ? `  (dev code: ${devCode})` : ''}
       </Muted>
 

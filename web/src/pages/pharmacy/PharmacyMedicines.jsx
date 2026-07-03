@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { PharmacyApi, CatalogApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Input, Button, Badge, Loader, Modal, money } from '../../components/UI';
+import { Input, Button, Badge, Loader, Modal, money, ErrorState } from '../../components/UI';
 
 export default function PharmacyMedicines() {
-  const { data, loading, reload } = useAsync(() => PharmacyApi.medicines());
+  const { data, loading, error, reload } = useAsync(() => PharmacyApi.medicines());
   const { data: catData, reload: reloadCategories } = useAsync(() => CatalogApi.categories());
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   if (loading) return <Loader />;
+  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
   const categories = catData || [];
 
@@ -66,21 +67,31 @@ export default function PharmacyMedicines() {
 function MedicineRow({ m, categories, onReloadCategories, onChange }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [err, setErr] = useState('');
   const name = m.master_name || m.custom_name;
 
   const toggleStock = async () => {
-    setBusy(true);
+    setBusy(true); setErr('');
     try {
       await PharmacyApi.updateMedicine(m.id, { stock_status: m.stock_status === 'in_stock' ? 'out_of_stock' : 'in_stock' });
       onChange();
-    } finally { setBusy(false); }
+    } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
   };
   const toggleActive = async () => {
-    setBusy(true);
+    setBusy(true); setErr('');
     try {
       await PharmacyApi.updateMedicine(m.id, { status: m.status === 'active' ? 'inactive' : 'active' });
       onChange();
-    } finally { setBusy(false); }
+    } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setBusy(true); setErr('');
+    try {
+      await PharmacyApi.deleteMedicine(m.id);
+      setConfirming(false);
+      onChange();
+    } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
   };
 
   return (
@@ -95,11 +106,107 @@ function MedicineRow({ m, categories, onReloadCategories, onChange }) {
       <td><Badge value={m.status} /></td>
       <td style={{ whiteSpace: 'nowrap' }}>
         <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>{' '}
-        <Button size="sm" variant="outline" onClick={toggleStock} loading={busy}>{m.stock_status === 'in_stock' ? 'Mark out' : 'Mark in'}</Button>{' '}
-        <Button size="sm" variant="ghost" onClick={toggleActive} loading={busy}>{m.status === 'active' ? 'Disable' : 'Enable'}</Button>
+        <Button size="sm" variant="outline" onClick={toggleStock} loading={busy} style={{ minWidth: 82 }}>{m.stock_status === 'in_stock' ? 'Mark out' : 'Mark in'}</Button>{' '}
+        <Button size="sm" variant="ghost" onClick={toggleActive} loading={busy} style={{ minWidth: 72 }}>{m.status === 'active' ? 'Disable' : 'Enable'}</Button>{' '}
+        <Button size="sm" variant="danger" onClick={() => setConfirming(true)} loading={busy}>Delete</Button>
+        {err && <div className="badge red" style={{ marginTop: 6, whiteSpace: 'normal' }}>{err}</div>}
         <Modal open={editing} onClose={() => setEditing(false)} title={`Edit — ${name}`}>
           <EditMedicine m={m} categories={categories} onReloadCategories={onReloadCategories} onDone={() => { setEditing(false); onChange(); }} />
         </Modal>
+        <Modal
+  open={confirming}
+  onClose={() => setConfirming(false)}
+  title=""
+  width="min(360px, calc(100vw - 32px))"
+>
+  <div
+    style={{
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
+      textAlign: 'center',
+      padding: '4px 4px 2px',
+      overflowX: 'hidden',
+    }}
+  >
+    <div
+      aria-hidden="true"
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        background: '#FDEAEA',
+        color: '#E03131',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 24,
+        marginBottom: 18,
+        boxShadow: '0 0 0 7px #FCF4F4',
+      }}
+    >
+      🗑️
+    </div>
+
+    <h3
+      style={{
+        fontSize: 19,
+        fontWeight: 700,
+        margin: '0 0 6px',
+        overflowWrap: 'anywhere',
+        lineHeight: 1.3,
+      }}
+    >
+      Delete &ldquo;{name}&rdquo;?
+    </h3>
+
+    <p
+      className="muted"
+      style={{
+        margin: '0 auto 22px',
+        maxWidth: '100%',
+        fontSize: 13.5,
+        lineHeight: 1.5,
+      }}
+    >
+      Are you sure you want to delete this medicine?
+    </p>
+
+    <div
+      style={{
+        display: 'flex',
+        gap: 10,
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    >
+      <button
+        type="button"
+        className="btn"
+        onClick={() => setConfirming(false)}
+        disabled={busy}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          boxSizing: 'border-box',
+          background: '#F1F3F5',
+          color: 'var(--text)',
+          fontWeight: 600,
+        }}
+      >
+        Cancel
+      </button>
+      <Button
+        variant="danger"
+        onClick={remove}
+        loading={busy}
+        style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', fontWeight: 600 }}
+      >
+        Delete
+      </Button>
+    </div>
+  </div>
+</Modal>
       </td>
     </tr>
   );

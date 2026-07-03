@@ -10,17 +10,28 @@ const { presentUser } = require('../utils/present');
 const config = require('../config');
 const { ROLES, USER_STATUS, AADHAAR_KYC_STATUS } = require('../constants/enums');
 
-// POST /auth/request-otp
+// Resolve the OTP destination from the chosen channel.
+function otpDestination(channel, { mobile, email }) {
+  if (channel === 'email') {
+    if (!email) throw ApiError.badRequest('Email is required for email OTP');
+    return email;
+  }
+  if (!mobile) throw ApiError.badRequest('Mobile number is required');
+  return mobile;
+}
+
+// POST /auth/request-otp  { mobile?, email?, channel? }
 const requestOtp = asyncHandler(async (req, res) => {
-  const { mobile } = req.body;
-  const result = await otpService.requestOtp(mobile, 'login');
+  const { mobile, email, channel = 'sms' } = req.body;
+  const destination = otpDestination(channel, { mobile, email });
+  const result = await otpService.requestOtp({ channel, destination }, 'login');
   return ok(res, result, 'OTP sent');
 });
 
-// POST /auth/verify-otp  -> login or auto-register a normal user
+// POST /auth/verify-otp  -> login or auto-register a normal user (SMS/mobile)
 const verifyOtp = asyncHandler(async (req, res) => {
   const { mobile, code } = req.body;
-  await otpService.verifyOtp(mobile, code, 'login');
+  await otpService.verifyOtp({ channel: 'sms', destination: mobile }, code, 'login');
 
   let user = await db('users').where({ mobile }).first();
   let isNewUser = false;
@@ -59,11 +70,12 @@ const SELF_REGISTER_ROLES = [ROLES.USER, ROLES.AMBULANCE_DRIVER];
 // POST /auth/register  (OTP-verified signup with role + email + password)
 // body: { name, mobile, email, password, role, code }
 const register = asyncHandler(async (req, res) => {
-  const { name, mobile, email, password, role, code } = req.body;
+  const { name, mobile, email, password, role, code, channel = 'sms' } = req.body;
   const finalRole = SELF_REGISTER_ROLES.includes(role) ? role : ROLES.USER;
 
-  // Verify the OTP that was sent to this mobile.
-  await otpService.verifyOtp(mobile, code, 'login');
+  // Verify the OTP that was sent to the chosen channel (mobile or email).
+  const destination = otpDestination(channel, { mobile, email });
+  await otpService.verifyOtp({ channel, destination }, code, 'login');
 
   if (await db('users').where({ mobile }).first()) {
     throw ApiError.conflict('An account with this mobile already exists. Please log in.');
@@ -148,6 +160,51 @@ const passwordLogin = asyncHandler(async (req, res) => {
   return ok(res, { user: presentUser(user), ...tokens }, 'Login successful');
 });
 
+// Find a user by the identifier for the chosen channel.
+async function findUserByChannel(channel, destination) {
+  return channel === 'email'
+    ? db('users').where({ email: destination }).first()
+    : db('users').where({ mobile: destination }).first();
+}
+
+// POST /auth/forgot-password/request-otp  { mobile?, email?, channel? }
+const forgotPasswordRequestOtp = asyncHandler(async (req, res) => {
+  const { mobile, email, channel = 'sms' } = req.body;
+  const destination = otpDestination(channel, { mobile, email });
+  const user = await findUserByChannel(channel, destination);
+  if (!user) throw ApiError.notFound('No account found with these details');
+  if (user.status === USER_STATUS.BLOCKED) throw ApiError.forbidden('Your account is blocked');
+  const result = await otpService.requestOtp({ channel, destination }, 'reset_password');
+  return ok(res, result, 'OTP sent');
+});
+
+// POST /auth/forgot-password/reset  { mobile?, email?, channel?, code, newPassword }
+const forgotPasswordReset = asyncHandler(async (req, res) => {
+  const { mobile, email, channel = 'sms', code, newPassword } = req.body;
+  const destination = otpDestination(channel, { mobile, email });
+  if (!newPassword || newPassword.length < 6) throw ApiError.badRequest('Password must be at least 6 characters');
+  const user = await findUserByChannel(channel, destination);
+  if (!user) throw ApiError.notFound('No account found with these details');
+
+  await otpService.verifyOtp({ channel, destination }, code, 'reset_password');
+  const password_hash = await bcrypt.hash(newPassword, 10);
+  await db('users').where({ id: user.id }).update({ password_hash });
+  return ok(res, {}, 'Password reset successful. Please log in with your new password.');
+});
+
+// POST /auth/change-password  (authenticated)  { currentPassword, newPassword }
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!newPassword || newPassword.length < 6) throw ApiError.badRequest('New password must be at least 6 characters');
+  const user = await db('users').where({ id: req.user.id }).first();
+  if (!user.password_hash) throw ApiError.badRequest('Your account has no password set. Use OTP login.');
+  const matches = await bcrypt.compare(currentPassword || '', user.password_hash);
+  if (!matches) throw ApiError.unauthorized('Current password is incorrect');
+  const password_hash = await bcrypt.hash(newPassword, 10);
+  await db('users').where({ id: user.id }).update({ password_hash });
+  return ok(res, {}, 'Password changed successfully');
+});
+
 // POST /auth/refresh
 const refresh = asyncHandler(async (req, res) => {
   const { refreshToken } = req.body;
@@ -166,8 +223,10 @@ const refresh = asyncHandler(async (req, res) => {
 
 // GET /auth/me
 const me = asyncHandler(async (req, res) => {
-  const profile = await db('user_profiles').where({ user_id: req.user.id }).first();
-  const donor = await db('donor_profiles').where({ user_id: req.user.id }).first();
+  const [profile, donor] = await Promise.all([
+    db('user_profiles').where({ user_id: req.user.id }).first(),
+    db('donor_profiles').where({ user_id: req.user.id }).first(),
+  ]);
   return ok(res, { user: presentUser(req.user), profile: profile || null, donor: donor || null });
 });
 
@@ -233,6 +292,9 @@ module.exports = {
   loginEmail,
   registerPharmacy,
   passwordLogin,
+  forgotPasswordRequestOtp,
+  forgotPasswordReset,
+  changePassword,
   refresh,
   me,
   aadhaarGenerateOtp,

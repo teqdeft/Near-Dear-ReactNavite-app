@@ -3,14 +3,104 @@ const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
+const { requireKyc } = require('../utils/requireKyc');
 const {
   ROLES, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
 } = require('../constants/enums');
+
+// Requests still looking for donors.
+const ACTIVE_REQUEST_STATUSES = [BLOOD_REQUEST_STATUS.OPEN, BLOOD_REQUEST_STATUS.MATCHED];
+
+// Backfill: when a donor becomes available (freshly registered or toggles ON),
+// hook them up to blood requests that are still open in their city + group but
+// were created before they were available — otherwise those requests would
+// never reach them (matching otherwise only runs at request-creation time).
+async function matchOpenRequestsToDonor(donor) {
+  if (!donor || !donor.blood_group || !donor.city) return 0;
+  if (!donor.is_available || donor.status !== DONOR_STATUS.ACTIVE) return 0;
+
+  const requests = await db('blood_requests')
+    .where({ blood_group_required: donor.blood_group })
+    .whereIn('status', ACTIVE_REQUEST_STATUSES)
+    .whereRaw('LOWER(city) = LOWER(?)', [donor.city])
+    .andWhere('requester_id', '!=', donor.user_id)
+    .whereNotExists(function subquery() {
+      this.select('*').from('blood_request_matches as m')
+        .whereRaw('m.blood_request_id = blood_requests.id')
+        .andWhere('m.donor_user_id', donor.user_id);
+    });
+
+  if (requests.length === 0) return 0;
+
+  // Batch the match inserts, notifications and the OPEN→MATCHED flip instead of
+  // doing three serial DB round-trips per request.
+  await db('blood_request_matches').insert(requests.map((r) => ({
+    blood_request_id: r.id,
+    donor_user_id: donor.user_id,
+    donor_profile_id: donor.id,
+    notification_sent: true,
+    response_status: MATCH_RESPONSE.PENDING,
+  })));
+
+  const openIds = requests.filter((r) => r.status === BLOOD_REQUEST_STATUS.OPEN).map((r) => r.id);
+  await Promise.all([
+    ...requests.map((r) => notify(donor.user_id, {
+      title: 'Blood request near you',
+      message: `${r.blood_group_required} needed at ${r.hospital_name}, ${r.city}.`,
+      type: NOTIFICATION_TYPE.BLOOD,
+      referenceId: r.id,
+    })),
+    openIds.length
+      ? db('blood_requests').whereIn('id', openIds).update({ status: BLOOD_REQUEST_STATUS.MATCHED })
+      : Promise.resolve(),
+  ]);
+  return requests.length;
+}
+
+// Notify every donor matched to a request (used when the requester closes it).
+async function notifyMatchedDonors(requestId, payload) {
+  const matches = await db('blood_request_matches')
+    .where({ blood_request_id: requestId }).select('donor_user_id');
+  await Promise.all(matches.map((m) => notify(m.donor_user_id, payload)));
+}
+
+// Shared accept/decline logic for a match row (used by both the match-id and
+// request-id response endpoints).
+async function applyMatchResponse({ match, request, action, userId, res }) {
+  if (match.response_status !== MATCH_RESPONSE.PENDING) throw ApiError.badRequest('You have already responded');
+
+  if (action === 'accept') {
+    await db('blood_request_matches').where({ id: match.id }).update({
+      response_status: MATCH_RESPONSE.ACCEPTED,
+      contact_shared: true,
+      responded_at: db.fn.now(),
+    });
+    const donorUser = await db('users').where({ id: userId }).first();
+    await notify(request.requester_id, {
+      title: 'A donor accepted your blood request',
+      message: `${donorUser.name || 'A donor'} accepted. You can now contact each other.`,
+      type: NOTIFICATION_TYPE.BLOOD,
+      referenceId: request.id,
+    });
+    return ok(res, { contact_shared: true, requester_contact: { name: request.contact_person_name, mobile: request.contact_person_mobile } }, 'Accepted. Contact details shared.');
+  }
+
+  if (action === 'decline') {
+    await db('blood_request_matches').where({ id: match.id }).update({
+      response_status: MATCH_RESPONSE.DECLINED,
+      responded_at: db.fn.now(),
+    });
+    return ok(res, null, 'Declined');
+  }
+
+  throw ApiError.badRequest("action must be 'accept' or 'decline'");
+}
 
 // ---- Donor ------------------------------------------------------------
 
 // POST /blood/donor  — become a donor / update donor profile
 const becomeDonor = asyncHandler(async (req, res) => {
+  requireKyc(req);
   const userId = req.user.id;
   const {
     blood_group, city, pincode, latitude, longitude, last_donation_date,
@@ -41,7 +131,12 @@ const becomeDonor = asyncHandler(async (req, res) => {
   }
 
   const donor = await db('donor_profiles').where({ user_id: userId }).first();
-  return created(res, donor, 'Donor profile saved');
+  // Connect this donor to any still-open requests they now qualify for.
+  const matched = await matchOpenRequestsToDonor(donor);
+  const message = matched
+    ? `Donor profile saved. ${matched} open request(s) near you — check your requests.`
+    : 'Donor profile saved';
+  return created(res, { ...donor, backfilled_requests: matched }, message);
 });
 
 // PUT /blood/donor/availability  { is_available }
@@ -53,7 +148,17 @@ const setAvailability = asyncHandler(async (req, res) => {
     is_available,
     status: is_available ? DONOR_STATUS.ACTIVE : DONOR_STATUS.PAUSED,
   });
-  return ok(res, { is_available }, is_available ? 'You are now available' : 'Availability paused');
+
+  // Turning availability ON backfills any open requests created while paused.
+  let matched = 0;
+  if (is_available) {
+    const donor = await db('donor_profiles').where({ user_id: req.user.id }).first();
+    matched = await matchOpenRequestsToDonor(donor);
+  }
+  const message = is_available
+    ? (matched ? `You are now available. ${matched} open request(s) near you.` : 'You are now available')
+    : 'Availability paused';
+  return ok(res, { is_available, backfilled_requests: matched }, message);
 });
 
 // GET /blood/donor/me
@@ -66,6 +171,7 @@ const myDonorProfile = asyncHandler(async (req, res) => {
 
 // POST /blood/requests  — create request + auto-match available donors
 const createRequest = asyncHandler(async (req, res) => {
+  requireKyc(req);
   const userId = req.user.id;
   const b = req.body;
   const [id] = await db('blood_requests').insert({
@@ -95,25 +201,22 @@ const createRequest = asyncHandler(async (req, res) => {
     .whereRaw('LOWER(city) = LOWER(?)', [b.city])
     .andWhere('user_id', '!=', userId);
 
-  for (const donor of donors) {
-    // eslint-disable-next-line no-await-in-loop
-    await db('blood_request_matches').insert({
+  if (donors.length) {
+    // Batch the match inserts + notifications instead of a serial round-trip
+    // per donor (this is a time-critical path on an emergency request).
+    await db('blood_request_matches').insert(donors.map((donor) => ({
       blood_request_id: id,
       donor_user_id: donor.user_id,
       donor_profile_id: donor.id,
       notification_sent: true,
       response_status: MATCH_RESPONSE.PENDING,
-    });
-    // eslint-disable-next-line no-await-in-loop
-    await notify(donor.user_id, {
+    })));
+    await Promise.all(donors.map((donor) => notify(donor.user_id, {
       title: 'Urgent blood request near you',
       message: `${b.blood_group_required} needed at ${b.hospital_name}, ${b.city}.`,
       type: NOTIFICATION_TYPE.BLOOD,
       referenceId: id,
-    });
-  }
-
-  if (donors.length) {
+    })));
     await db('blood_requests').where({ id }).update({ status: BLOOD_REQUEST_STATUS.MATCHED });
   }
 
@@ -156,6 +259,13 @@ const cancelRequest = asyncHandler(async (req, res) => {
     status: BLOOD_REQUEST_STATUS.CANCELLED,
     notes: req.body.reason ? `${request.notes || ''}\nCancelled: ${req.body.reason}` : request.notes,
   });
+  // Let matched donors know it's closed so it clears from their list.
+  await notifyMatchedDonors(request.id, {
+    title: 'Blood request cancelled',
+    message: `The ${request.blood_group_required} request at ${request.hospital_name} was cancelled.`,
+    type: NOTIFICATION_TYPE.BLOOD,
+    referenceId: request.id,
+  });
   return ok(res, null, 'Request cancelled');
 });
 
@@ -164,6 +274,13 @@ const fulfillRequest = asyncHandler(async (req, res) => {
   const request = await db('blood_requests').where({ id: req.params.id, requester_id: req.user.id }).first();
   if (!request) throw ApiError.notFound('Request not found');
   await db('blood_requests').where({ id: request.id }).update({ status: BLOOD_REQUEST_STATUS.FULFILLED });
+  // Reflect on the donor side + thank everyone who was matched.
+  await notifyMatchedDonors(request.id, {
+    title: 'Blood request fulfilled',
+    message: `The ${request.blood_group_required} request at ${request.hospital_name} has been fulfilled. Thank you for your support!`,
+    type: NOTIFICATION_TYPE.BLOOD,
+    referenceId: request.id,
+  });
   return ok(res, null, 'Marked as fulfilled');
 });
 
@@ -177,7 +294,7 @@ const donorIncomingRequests = asyncHandler(async (req, res) => {
     .select(
       'm.id as match_id', 'm.response_status', 'm.contact_shared',
       'r.id as request_id', 'r.patient_name', 'r.blood_group_required', 'r.units_required',
-      'r.hospital_name', 'r.hospital_address', 'r.city', 'r.urgency_level', 'r.required_at', 'r.status',
+      'r.hospital_name', 'r.hospital_address', 'r.city', 'r.urgency_level', 'r.required_at', 'r.created_at', 'r.status',
       // Requester contact only after the donor accepts.
       db.raw('CASE WHEN m.contact_shared = 1 THEN r.contact_person_name ELSE NULL END as contact_person_name'),
       db.raw('CASE WHEN m.contact_shared = 1 THEN r.contact_person_mobile ELSE NULL END as contact_person_mobile')
@@ -186,45 +303,74 @@ const donorIncomingRequests = asyncHandler(async (req, res) => {
   return ok(res, rows);
 });
 
+// GET /blood/requests/open  — open requests near this donor (browse feed).
+// Shows every still-open request matching the donor's blood group + city,
+// regardless of whether a match row was pre-created, plus this donor's own
+// response state so the UI can show Accept/Decline or "accepted".
+const donorOpenRequests = asyncHandler(async (req, res) => {
+  const donor = await db('donor_profiles').where({ user_id: req.user.id }).first();
+  if (!donor) throw ApiError.notFound('You are not registered as a donor');
+  if (!donor.blood_group || !donor.city) return ok(res, []);
+
+  const rows = await db('blood_requests as r')
+    .leftJoin('blood_request_matches as m', function joinMatch() {
+      this.on('m.blood_request_id', 'r.id').andOn('m.donor_user_id', '=', db.raw('?', [req.user.id]));
+    })
+    .where('r.blood_group_required', donor.blood_group)
+    .whereIn('r.status', ACTIVE_REQUEST_STATUSES)
+    .whereRaw('LOWER(r.city) = LOWER(?)', [donor.city])
+    .andWhere('r.requester_id', '!=', req.user.id)
+    .select(
+      'r.id as request_id', 'r.patient_name', 'r.blood_group_required', 'r.units_required',
+      'r.hospital_name', 'r.hospital_address', 'r.city', 'r.urgency_level', 'r.required_at', 'r.status',
+      'm.id as match_id', 'm.response_status', 'm.contact_shared',
+      db.raw('CASE WHEN m.contact_shared = 1 THEN r.contact_person_name ELSE NULL END as contact_person_name'),
+      db.raw('CASE WHEN m.contact_shared = 1 THEN r.contact_person_mobile ELSE NULL END as contact_person_mobile')
+    )
+    .orderBy('r.id', 'desc');
+  return ok(res, rows);
+});
+
 // POST /blood/matches/:id/respond  { action: 'accept' | 'decline' }
 const respondToMatch = asyncHandler(async (req, res) => {
   const { action } = req.body;
+  if (action === 'accept') requireKyc(req); // accepting = committing to donate
   const match = await db('blood_request_matches').where({ id: req.params.id, donor_user_id: req.user.id }).first();
   if (!match) throw ApiError.notFound('Match not found');
-  if (match.response_status !== MATCH_RESPONSE.PENDING) throw ApiError.badRequest('You have already responded');
-
   const request = await db('blood_requests').where({ id: match.blood_request_id }).first();
+  return applyMatchResponse({ match, request, action, userId: req.user.id, res });
+});
 
-  if (action === 'accept') {
-    await db('blood_request_matches').where({ id: match.id }).update({
-      response_status: MATCH_RESPONSE.ACCEPTED,
-      contact_shared: true,
-      responded_at: db.fn.now(),
+// POST /blood/requests/:id/respond  { action } — respond straight from the
+// browse feed; creates the match row on the fly if one doesn't exist yet.
+const respondToRequest = asyncHandler(async (req, res) => {
+  const { action } = req.body;
+  if (action === 'accept') requireKyc(req); // accepting = committing to donate
+  const donor = await db('donor_profiles').where({ user_id: req.user.id }).first();
+  if (!donor) throw ApiError.notFound('You are not registered as a donor');
+  const request = await db('blood_requests').where({ id: req.params.id }).first();
+  if (!request) throw ApiError.notFound('Request not found');
+
+  let match = await db('blood_request_matches')
+    .where({ blood_request_id: request.id, donor_user_id: req.user.id }).first();
+  if (!match) {
+    const [mid] = await db('blood_request_matches').insert({
+      blood_request_id: request.id,
+      donor_user_id: req.user.id,
+      donor_profile_id: donor.id,
+      notification_sent: false,
+      response_status: MATCH_RESPONSE.PENDING,
     });
-    // Notify the requester that a donor accepted (contact now shared both ways).
-    const donorUser = await db('users').where({ id: req.user.id }).first();
-    await notify(request.requester_id, {
-      title: 'A donor accepted your blood request',
-      message: `${donorUser.name || 'A donor'} accepted. You can now contact each other.`,
-      type: NOTIFICATION_TYPE.BLOOD,
-      referenceId: request.id,
-    });
-    return ok(res, { contact_shared: true, requester_contact: { name: request.contact_person_name, mobile: request.contact_person_mobile } }, 'Accepted. Contact details shared.');
+    match = await db('blood_request_matches').where({ id: mid }).first();
+    if (request.status === BLOOD_REQUEST_STATUS.OPEN) {
+      await db('blood_requests').where({ id: request.id }).update({ status: BLOOD_REQUEST_STATUS.MATCHED });
+    }
   }
-
-  if (action === 'decline') {
-    await db('blood_request_matches').where({ id: match.id }).update({
-      response_status: MATCH_RESPONSE.DECLINED,
-      responded_at: db.fn.now(),
-    });
-    return ok(res, null, 'Declined');
-  }
-
-  throw ApiError.badRequest("action must be 'accept' or 'decline'");
+  return applyMatchResponse({ match, request, action, userId: req.user.id, res });
 });
 
 module.exports = {
   becomeDonor, setAvailability, myDonorProfile,
   createRequest, myRequests, requestDetail, cancelRequest, fulfillRequest,
-  donorIncomingRequests, respondToMatch,
+  donorIncomingRequests, donorOpenRequests, respondToMatch, respondToRequest,
 };

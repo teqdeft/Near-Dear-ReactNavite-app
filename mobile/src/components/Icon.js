@@ -48,6 +48,8 @@ const ALIASES = {
   clock: 'clock-outline',
   email: 'email-outline',
   lock: 'lock-outline',
+  eye: 'eye-outline',
+  eyeOff: 'eye-off-outline',
   user: 'account-outline',
   calendar: 'calendar-outline',
   alert: 'alert-circle-outline',

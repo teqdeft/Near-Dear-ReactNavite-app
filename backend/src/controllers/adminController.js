@@ -7,7 +7,7 @@ const { notify } = require('../services/notificationService');
 const { logAction } = require('../services/auditService');
 const {
   ROLES, USER_STATUS, PHARMACY_APPROVAL, AMBULANCE_STATUS,
-  SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS,
+  SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, AMBULANCE_APPROVAL,
 } = require('../constants/enums');
 
 const ip = (req) => req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
@@ -15,16 +15,31 @@ const ip = (req) => req.headers['x-forwarded-for'] || req.socket?.remoteAddress 
 // GET /admin/dashboard
 const dashboard = asyncHandler(async (req, res) => {
   const count = async (table, where = {}) => Number((await db(table).where(where).count('* as c').first()).c);
-  const data = {
-    users: await count('users', { role: ROLES.USER }),
-    donors: await count('donor_profiles'),
-    active_blood_requests: await count('blood_requests', { status: 'open' }) + await count('blood_requests', { status: 'matched' }),
-    pending_pharmacies: await count('pharmacies', { approval_status: PHARMACY_APPROVAL.PENDING }),
-    medicine_orders: await count('medicine_orders'),
-    ambulance_requests: await count('ambulance_requests'),
-    open_tickets: await count('support_tickets', { status: SUPPORT_STATUS.OPEN }),
-  };
-  return ok(res, data);
+  // These counts are independent — run them concurrently instead of serially.
+  const [
+    users, donors, openBlood, matchedBlood, pendingPharmacies,
+    medicineOrders, ambulanceRequests, openTickets,
+  ] = await Promise.all([
+    // Every registered app user except admins (donors, pharmacy owners and
+    // drivers are all users who happen to have taken on a role).
+    db('users').whereNot('role', ROLES.ADMIN).count('* as c').first().then((r) => Number(r.c)),
+    count('donor_profiles'),
+    count('blood_requests', { status: 'open' }),
+    count('blood_requests', { status: 'matched' }),
+    count('pharmacies', { approval_status: PHARMACY_APPROVAL.PENDING }),
+    count('medicine_orders'),
+    count('ambulance_requests'),
+    count('support_tickets', { status: SUPPORT_STATUS.OPEN }),
+  ]);
+  return ok(res, {
+    users,
+    donors,
+    active_blood_requests: openBlood + matchedBlood,
+    pending_pharmacies: pendingPharmacies,
+    medicine_orders: medicineOrders,
+    ambulance_requests: ambulanceRequests,
+    open_tickets: openTickets,
+  });
 });
 
 // ---- Users ------------------------------------------------------------
@@ -54,7 +69,11 @@ const setUserStatus = asyncHandler(async (req, res) => {
 const listPharmacies = asyncHandler(async (req, res) => {
   const q = db('pharmacies');
   if (req.query.status) q.andWhere('approval_status', req.query.status);
-  const rows = await q.orderBy('id', 'desc');
+  // Bound the result so the table can't return unbounded rows; callers can page
+  // via ?page= while the response stays a plain array.
+  const limit = Math.min(Number(req.query.limit) || 100, 200);
+  const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
+  const rows = await q.orderBy('id', 'desc').limit(limit).offset(offset);
   return ok(res, rows);
 });
 
@@ -89,6 +108,61 @@ const reviewPharmacy = asyncHandler(async (req, res) => {
     referenceId: pharmacy.id,
   });
   return ok(res, { status }, `Pharmacy ${status}`);
+});
+
+// ---- Ambulance vehicles (driver self-registered, need approval) -------
+// GET /admin/ambulance-vehicles?status=
+const listAmbulanceVehicles = asyncHandler(async (req, res) => {
+  const q = db('ambulances as a')
+    .leftJoin('users as u', 'u.id', 'a.driver_user_id')
+    .select('a.*', 'u.name as driver_name', 'u.mobile as driver_mobile')
+    .whereNotNull('a.driver_user_id'); // self-registered vehicles only
+  if (req.query.status) q.andWhere('a.approval_status', req.query.status);
+  const rows = await q.orderBy('a.id', 'desc');
+  return ok(res, rows);
+});
+
+// GET /admin/ambulance-vehicles/:id
+const ambulanceVehicleDetail = asyncHandler(async (req, res) => {
+  const vehicle = await db('ambulances as a')
+    .leftJoin('users as u', 'u.id', 'a.driver_user_id')
+    .where('a.id', req.params.id)
+    .select('a.*', 'u.name as driver_name', 'u.mobile as driver_mobile', 'u.aadhaar_kyc_status')
+    .first();
+  if (!vehicle) throw ApiError.notFound('Vehicle not found');
+  const documents = await db('ambulance_documents').where({ ambulance_id: vehicle.id }).orderBy('id', 'desc');
+  return ok(res, { vehicle, documents });
+});
+
+// PUT /admin/ambulance-vehicles/:id/review  { status, reason? }
+const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
+  const { status, reason } = req.body; // approved | rejected
+  if (![AMBULANCE_APPROVAL.APPROVED, AMBULANCE_APPROVAL.REJECTED].includes(status)) {
+    throw ApiError.badRequest('Invalid approval status');
+  }
+  const vehicle = await db('ambulances').where({ id: req.params.id }).first();
+  if (!vehicle) throw ApiError.notFound('Vehicle not found');
+
+  await db('ambulances').where({ id: vehicle.id }).update({
+    approval_status: status,
+    rejection_reason: status === AMBULANCE_APPROVAL.REJECTED ? (reason || 'Rejected') : null,
+    approved_by: req.user.id,
+    approved_at: status === AMBULANCE_APPROVAL.APPROVED ? db.fn.now() : null,
+    // An approved ambulance becomes available; a rejected one stays inactive.
+    status: status === AMBULANCE_APPROVAL.APPROVED ? 'available' : 'inactive',
+  });
+  await logAction(req.user.id, { action: `ambulance_${status}`, entityType: 'ambulance', entityId: vehicle.id, oldValue: { status: vehicle.approval_status }, newValue: { status }, ip: ip(req) });
+  if (vehicle.driver_user_id) {
+    await notify(vehicle.driver_user_id, {
+      title: `Ambulance ${status}`,
+      message: status === AMBULANCE_APPROVAL.APPROVED
+        ? 'Your ambulance is approved. You can now accept rides.'
+        : `Your ambulance was rejected. ${reason || ''}`.trim(),
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: vehicle.id,
+    });
+  }
+  return ok(res, { status }, `Ambulance ${status}`);
 });
 
 // ---- Blood requests ---------------------------------------------------
@@ -252,6 +326,7 @@ const listAuditLogs = asyncHandler(async (req, res) => {
 module.exports = {
   dashboard, listUsers, setUserStatus,
   listPharmacies, pharmacyDetail, reviewPharmacy,
+  listAmbulanceVehicles, ambulanceVehicleDetail, reviewAmbulanceVehicle,
   listBloodRequests, setBloodRequestStatus,
   listAmbulanceRequests, assignAmbulance, addProvider, addAmbulance, listAmbulances,
   createDriver, listDrivers,

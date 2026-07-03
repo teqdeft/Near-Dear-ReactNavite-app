@@ -3,6 +3,7 @@ const axios = require('axios');
 const db = require('../db/knex');
 const config = require('../config');
 const ApiError = require('../utils/ApiError');
+const emailService = require('./emailService');
 
 const MAX_ATTEMPTS = 5;
 
@@ -23,15 +24,23 @@ function expiryExpr() {
  * - msg91: real SMS via MSG91 OTP API.
  * Returns the code that should be stored/verified.
  */
-async function deliverOtp(mobile) {
+async function deliverOtp(channel, destination) {
   if (config.otp.provider === 'mock') {
     // In mock mode we accept the configured dev code, so "store" that.
+    // (Email is logged by emailService, SMS isn't sent at all.)
+    if (channel === 'email') await emailService.sendOtpEmail(destination, config.otp.devCode);
     return config.otp.devCode;
   }
 
   // Real provider: generate a random code and send it.
   const code = genCode();
 
+  if (channel === 'email') {
+    await emailService.sendOtpEmail(destination, code);
+    return code;
+  }
+
+  const mobile = destination;
   if (config.otp.provider === 'msg91') {
     const { authKey, templateId, senderId } = config.otp.msg91;
     if (!authKey || !templateId) {
@@ -57,33 +66,38 @@ async function deliverOtp(mobile) {
 }
 
 /**
- * Create + send an OTP for a mobile number.
+ * Create + send an OTP to a destination over a channel.
+ * @param {{channel?: 'sms'|'email', destination: string}} target
  */
-async function requestOtp(mobile, purpose = 'login') {
-  const code = await deliverOtp(mobile);
+async function requestOtp({ channel = 'sms', destination }, purpose = 'login') {
+  if (!destination) throw ApiError.badRequest('A phone number or email is required');
+  const code = await deliverOtp(channel, destination);
   const codeHash = await bcrypt.hash(code, 10);
 
-  // Invalidate previous unconsumed codes for this mobile/purpose.
-  await db('otp_codes').where({ mobile, purpose, consumed: false }).update({ consumed: true });
+  // Invalidate previous unconsumed codes for this destination/purpose.
+  await db('otp_codes').where({ destination, purpose, consumed: false }).update({ consumed: true });
 
   await db('otp_codes').insert({
-    mobile,
+    channel,
+    destination,
+    mobile: channel === 'sms' ? destination : null,
     purpose,
     code_hash: codeHash,
     expires_at: expiryExpr(),
   });
 
-  // In dev/mock we surface the code so the app can be tested without SMS.
+  // In dev/mock we surface the code so the app can be tested without a real SMS/email.
   const devCode = config.otp.provider === 'mock' ? config.otp.devCode : undefined;
-  return { sent: true, devCode };
+  return { sent: true, channel, devCode };
 }
 
 /**
  * Verify an OTP. Throws ApiError on failure. Marks the code consumed on success.
+ * @param {{channel?: 'sms'|'email', destination: string}} target
  */
-async function verifyOtp(mobile, code, purpose = 'login') {
+async function verifyOtp({ destination }, code, purpose = 'login') {
   const row = await db('otp_codes')
-    .where({ mobile, purpose, consumed: false })
+    .where({ destination, purpose, consumed: false })
     .andWhere('expires_at', '>', db.raw('NOW()'))
     .orderBy('id', 'desc')
     .first();

@@ -11,18 +11,35 @@ const num = (v) => (v == null || v === '' ? null : Number(v));
  * turn-by-turn directions to the pickup. Renders nothing if the request has no
  * pickup coordinates.
  */
-export default function DriverTripMap({ pickup, height = 190 }) {
+export default function DriverTripMap({ pickup, address, height = 190 }) {
   const p = pickup && pickup.lat != null && pickup.lng != null
     ? { latitude: num(pickup.lat), longitude: num(pickup.lng) }
     : null;
-  if (!p) return null;
 
   const navigate = () => {
-    const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&travelmode=driving`;
-    const androidNav = `google.navigation:q=${p.latitude},${p.longitude}`;
+    const dest = p ? `${p.latitude},${p.longitude}` : (address ? encodeURIComponent(address) : null);
+    if (!dest) return;
+    const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+    const androidNav = `google.navigation:q=${dest}`;
     const primary = Platform.OS === 'android' ? androidNav : gmaps;
     Linking.openURL(primary).catch(() => Linking.openURL(gmaps).catch(() => {}));
   };
+
+  // No pinned coordinates — still let the driver navigate by the typed address.
+  if (!p) {
+    if (!address) return null;
+    return (
+      <View style={styles.wrap}>
+        <View style={styles.noPin}>
+          <Text style={styles.noPinText}>📍 Patient didn’t pin a map location. Navigate using their address:</Text>
+          <Text style={styles.noPinAddr}>{address}</Text>
+        </View>
+        <TouchableOpacity style={styles.navBtn} onPress={navigate} activeOpacity={0.85}>
+          <Text style={styles.navTxt}>🧭  Navigate to pickup</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -49,6 +66,9 @@ export default function DriverTripMap({ pickup, height = 190 }) {
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.md },
   mapWrap: { borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surfaceAlt },
+  noPin: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md },
+  noPinText: { color: colors.textMuted, fontSize: font.small },
+  noPinAddr: { color: colors.text, fontWeight: font.semibold, fontSize: font.body, marginTop: 4 },
   navBtn: {
     marginTop: spacing.sm, backgroundColor: colors.ambulance,
     paddingVertical: 12, borderRadius: radius.md, alignItems: 'center',

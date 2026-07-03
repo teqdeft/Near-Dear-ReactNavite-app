@@ -1,23 +1,28 @@
 import { Link } from 'react-router-dom';
 import { PharmacyApi } from '../../api';
+import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Stat, Loader, Badge } from '../../components/UI';
+import { Stat, Loader, Badge, ErrorState } from '../../components/UI';
 
 export default function PharmacyDashboard() {
-  const { data, loading, error } = useAsync(() => PharmacyApi.dashboard());
+  const { data, loading, error, reload } = useAsync(() => PharmacyApi.dashboard());
 
   if (loading) return <Loader />;
   if (error) {
-    // Most likely: no pharmacy registered yet.
-    return (
-      <div className="card">
-        <h3>Welcome to your pharmacy panel 👋</h3>
-        <p className="muted" style={{ marginTop: 8 }}>
-          You haven't registered your pharmacy yet. Head to{' '}
-          <Link to="/pharmacy/profile">Profile & documents</Link> to add your details and upload your license.
-        </p>
-      </div>
-    );
+    // A 404 means no pharmacy is registered yet — show onboarding. Any other
+    // error (network / 500) is a real failure, not an onboarding prompt.
+    if (error?.response?.status === 404) {
+      return (
+        <div className="card">
+          <h3>Welcome to your pharmacy panel 👋</h3>
+          <p className="muted" style={{ marginTop: 8 }}>
+            You haven't registered your pharmacy yet. Head to{' '}
+            <Link to="/pharmacy/profile">Profile & documents</Link> to add your details and upload your license.
+          </p>
+        </div>
+      );
+    }
+    return <ErrorState message={errMessage(error)} onRetry={reload} />;
   }
 
   const o = data.orders;

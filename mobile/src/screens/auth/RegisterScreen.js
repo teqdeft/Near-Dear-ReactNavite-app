@@ -14,22 +14,29 @@ const ROLES = [
 export default function RegisterScreen({ navigation }) {
   const [form, setForm] = useState({ name: '', mobile: '', email: '', password: '', confirm: '' });
   const [role, setRole] = useState('user');
+  const [channel, setChannel] = useState('sms'); // 'sms' | 'email' — where to send the OTP
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Accent follows the selected role (user = teal, ambulance driver = blue).
+  const selectedRole = ROLES.find((r) => r.key === role) || ROLES[0];
+  const accent = selectedRole.color;
+  const accentTint = selectedRole.tint;
+
   const onContinue = async () => {
     const mobile = form.mobile.replace(/\D/g, '');
+    const email = form.email.trim().toLowerCase();
     if (!form.name.trim()) return Alert.alert('Name', 'Please enter your full name.');
     if (mobile.length < 10) return Alert.alert('Mobile', 'Enter a valid 10-digit mobile number.');
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) return Alert.alert('Email', 'Enter a valid email address.');
+    if (!/^\S+@\S+\.\S+$/.test(email)) return Alert.alert('Email', 'Enter a valid email address.');
     if (form.password.length < 6) return Alert.alert('Password', 'Password must be at least 6 characters.');
     if (form.password !== form.confirm) return Alert.alert('Password', 'Passwords do not match.');
     setLoading(true);
     try {
-      const res = await AuthApi.requestOtp(mobile);
+      const res = await AuthApi.requestOtp({ mobile, email, channel });
       navigation.navigate('Otp', {
-        mode: 'register', devCode: res?.data?.devCode,
-        payload: { name: form.name.trim(), mobile, email: form.email.trim().toLowerCase(), password: form.password, role },
+        mode: 'register', devCode: res?.data?.devCode, channel,
+        payload: { name: form.name.trim(), mobile, email, password: form.password, role, channel },
       });
     } catch (e) {
       Alert.alert('Could not send OTP', errMessage(e));
@@ -39,7 +46,7 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={[]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.subtitle}>Choose how you want to use NearDear</Text>
@@ -68,10 +75,23 @@ export default function RegisterScreen({ navigation }) {
           <TextField style={{ flex: 1 }} label="Confirm" leftIcon="lock" placeholder="••••••" secureTextEntry value={form.confirm} onChangeText={(v) => set('confirm', v)} />
         </View>
 
-        <AppButton title="Continue — verify mobile" icon="arrow" onPress={onContinue} loading={loading} style={{ marginTop: spacing.sm }} />
+        <Text style={styles.otpLabel}>Where should we send your OTP?</Text>
+        <View style={styles.channelRow}>
+          {[{ key: 'sms', label: '📱 Phone' }, { key: 'email', label: '✉️ Email' }].map((ch) => {
+            const active = channel === ch.key;
+            return (
+              <TouchableOpacity key={ch.key} activeOpacity={0.85} onPress={() => setChannel(ch.key)}
+                style={[styles.channelBtn, active && { borderColor: accent, backgroundColor: accentTint }]}>
+                <Text style={[styles.channelText, active && { color: accent }]}>{ch.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <AppButton title={channel === 'email' ? 'Continue — verify email' : 'Continue — verify mobile'} icon="arrow" color={accent} onPress={onContinue} loading={loading} style={{ marginTop: spacing.sm }} />
         <View style={styles.footer}>
           <Text style={styles.muted}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.link}>Log in</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()}><Text style={[styles.link, { color: accent }]}>Log in</Text></TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -87,4 +107,10 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg, marginBottom: spacing.lg },
   muted: { color: colors.textMuted, fontSize: font.body },
   link: { color: colors.primary, fontWeight: font.bold, fontSize: font.body },
+  otpLabel: { fontSize: font.tiny, color: colors.textMuted, marginTop: spacing.sm, marginBottom: 6, fontWeight: font.medium },
+  channelRow: { flexDirection: 'row', gap: spacing.sm },
+  channelBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
+  channelBtnActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  channelText: { fontSize: font.body, fontWeight: font.semibold, color: colors.textMuted },
+  channelTextActive: { color: colors.primary },
 });

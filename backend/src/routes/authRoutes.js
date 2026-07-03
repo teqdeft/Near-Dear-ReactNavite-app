@@ -6,8 +6,28 @@ const c = require('../controllers/authController');
 
 const mobileRule = body('mobile').isString().isLength({ min: 10, max: 15 }).withMessage('Valid mobile required');
 
-router.post('/request-otp', [mobileRule, validate], c.requestOtp);
+// request-otp accepts a mobile or an email (channel decides which) — the
+// controller validates the destination, so no strict field rule here.
+router.post('/request-otp', c.requestOtp);
 router.post('/verify-otp', [mobileRule, body('code').notEmpty().withMessage('OTP code required'), validate], c.verifyOtp);
+
+// Forgot / reset password (OTP-based, works with mobile or email).
+router.post('/forgot-password/request-otp', c.forgotPasswordRequestOtp);
+router.post(
+  '/forgot-password/reset',
+  [body('code').notEmpty().withMessage('OTP code required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'), validate],
+  c.forgotPasswordReset
+);
+
+// Change password for a logged-in user.
+router.post(
+  '/change-password',
+  [authenticate,
+    body('currentPassword').notEmpty().withMessage('Current password required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'), validate],
+  c.changePassword
+);
 
 // OTP-verified registration (role: user | ambulance_driver) + email/password login
 router.post(

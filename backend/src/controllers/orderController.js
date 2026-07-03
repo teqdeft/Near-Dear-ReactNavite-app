@@ -18,7 +18,10 @@ function genOrderNumber() {
 // body: { pharmacy_id, items:[{pharmacy_medicine_id, quantity}], delivery_address_id, prescription_id?, payment_method, delivery_fee? }
 const placeOrder = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const { pharmacy_id, items, delivery_address_id, prescription_id, payment_method, delivery_fee = 0 } = req.body;
+  const { pharmacy_id, items, delivery_address_id, prescription_id, payment_method } = req.body;
+  // Never trust a client-supplied fee blindly — clamp to a non-negative number
+  // so it can't be used to reduce (or inflate) the order total.
+  const delivery_fee = Math.max(0, Number(req.body.delivery_fee) || 0);
 
   if (!Array.isArray(items) || items.length === 0) throw ApiError.badRequest('Cart is empty');
 
@@ -120,8 +123,10 @@ const orderDetail = asyncHandler(async (req, res) => {
     .select('o.*', 'ph.pharmacy_name', 'ph.mobile as pharmacy_mobile')
     .first();
   if (!order) throw ApiError.notFound('Order not found');
-  const items = await db('medicine_order_items').where({ order_id: order.id });
-  const history = await db('order_status_history').where({ order_id: order.id }).orderBy('id', 'asc');
+  const [items, history] = await Promise.all([
+    db('medicine_order_items').where({ order_id: order.id }),
+    db('order_status_history').where({ order_id: order.id }).orderBy('id', 'asc'),
+  ]);
   return ok(res, { order, items, history });
 });
 

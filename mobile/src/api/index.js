@@ -5,11 +5,15 @@ const data = (p) => p.then((r) => r.data?.data);
 const full = (p) => p.then((r) => r.data);
 
 export const AuthApi = {
-  requestOtp: (mobile) => full(client.post('/auth/request-otp', { mobile })),
+  // Accepts a mobile string (legacy) or a { mobile, email, channel } payload.
+  requestOtp: (payload) => full(client.post('/auth/request-otp', typeof payload === 'string' ? { mobile: payload } : payload)),
   register: (payload) => data(client.post('/auth/register', payload)),
   login: (email, password) => data(client.post('/auth/login', { email, password })),
   verifyOtp: (mobile, code) => data(client.post('/auth/verify-otp', { mobile, code })),
   passwordLogin: (mobile, password) => data(client.post('/auth/admin-login', { mobile, password })),
+  forgotPasswordRequestOtp: (payload) => full(client.post('/auth/forgot-password/request-otp', payload)),
+  forgotPasswordReset: (payload) => data(client.post('/auth/forgot-password/reset', payload)),
+  changePassword: (payload) => data(client.post('/auth/change-password', payload)),
   me: () => data(client.get('/auth/me')),
   aadhaarGenerateOtp: (aadhaarNumber) => data(client.post('/auth/aadhaar/generate-otp', { aadhaarNumber })),
   aadhaarVerify: (otp) => data(client.post('/auth/aadhaar/verify', { otp })),
@@ -28,7 +32,9 @@ export const BloodApi = {
   myDonor: () => data(client.get('/blood/donor/me')),
   setAvailability: (is_available) => data(client.put('/blood/donor/availability', { is_available })),
   incomingRequests: () => data(client.get('/blood/donor/requests')),
+  openRequests: () => data(client.get('/blood/requests/open')),
   respondToMatch: (matchId, action) => data(client.post(`/blood/matches/${matchId}/respond`, { action })),
+  respondToRequest: (requestId, action) => data(client.post(`/blood/requests/${requestId}/respond`, { action })),
   createRequest: (payload) => data(client.post('/blood/requests', payload)),
   myRequests: () => data(client.get('/blood/requests/mine')),
   requestDetail: (id) => data(client.get(`/blood/requests/${id}`)),
@@ -49,6 +55,11 @@ export const AmbulanceApi = {
   // Live tracking
   track: (id) => data(client.get(`/ambulance/requests/${id}/track`)),
   updateLocation: (payload) => full(client.post('/ambulance/driver/location', payload)),
+  // Driver's own vehicle registration + documents (admin-approved)
+  myVehicle: () => data(client.get('/ambulance/driver/vehicle')),
+  registerVehicle: (payload) => data(client.post('/ambulance/driver/vehicle', payload)),
+  uploadVehicleDocument: (formData) =>
+    data(client.post('/ambulance/driver/vehicle/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
 };
 
 export const CatalogApi = {

@@ -83,7 +83,9 @@ export function AppButton({
 }
 
 // ---- Input ------------------------------------------------------------
-export function TextField({ label, error, leftIcon, style, inputStyle, ...props }) {
+export function TextField({ label, error, leftIcon, style, inputStyle, secureTextEntry, ...props }) {
+  const [hidden, setHidden] = React.useState(true);
+  const isPassword = !!secureTextEntry;
   return (
     <View style={[{ marginBottom: spacing.md }, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -92,8 +94,14 @@ export function TextField({ label, error, leftIcon, style, inputStyle, ...props 
         <TextInput
           placeholderTextColor={colors.textMuted}
           style={[styles.input, inputStyle]}
+          secureTextEntry={isPassword ? hidden : false}
           {...props}
         />
+        {isPassword ? (
+          <TouchableOpacity onPress={() => setHidden((h) => !h)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Icon name={hidden ? 'eye' : 'eyeOff'} size={20} color={colors.textMuted} style={{ marginLeft: 8 }} />
+          </TouchableOpacity>
+        ) : null}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>

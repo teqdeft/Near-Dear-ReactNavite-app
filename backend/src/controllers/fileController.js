@@ -36,6 +36,15 @@ const serve = asyncHandler(async (req, res) => {
       .first();
     const isOwner = doc && doc.owner_user_id === user.id;
     if (!isAdmin && !isOwner) throw ApiError.forbidden();
+  } else if (relPath.startsWith('ambulance_docs/')) {
+    // Admin or the driver who owns the ambulance.
+    const doc = await db('ambulance_documents as d')
+      .join('ambulances as a', 'a.id', 'd.ambulance_id')
+      .where('d.file_url', relPath)
+      .select('a.driver_user_id')
+      .first();
+    const isOwner = doc && doc.driver_user_id === user.id;
+    if (!isAdmin && !isOwner) throw ApiError.forbidden();
   }
   // Other folders (e.g. profile images) are accessible to any authenticated user.
 

@@ -68,6 +68,8 @@ export default function ProfileScreen({ navigation }) {
 
         <Card style={styles.menu}>
           <ListRow icon="edit" title="Edit profile" onPress={() => setEditing(true)} />
+          <ListRow icon="lock" title="Change password" onPress={() => navigation.navigate('ChangePassword')} />
+          {isDriver && <ListRow icon="ambulance" title="My ambulance" onPress={() => navigation.navigate('DriverVehicle')} />}
           {!isDriver && <ListRow icon="donor" iconColor={colors.blood} title="Donor profile" onPress={() => navigation.navigate('BecomeDonor')} />}
           {!isDriver && <ListRow icon="prescription" iconColor={colors.pharmacy} title="My prescriptions" onPress={() => navigation.navigate('Prescriptions')} />}
           {!isDriver && <ListRow icon="orders" title="My orders" onPress={() => navigation.navigate('Orders')} />}

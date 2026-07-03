@@ -3,7 +3,8 @@ import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle, EmptyState } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -15,12 +16,15 @@ export default function OrderDetailScreen({ route }) {
   const { id } = route.params;
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
 
   const load = useCallback(async () => {
-    try { setData(await OrderApi.orderDetail(id)); } catch (e) { Alert.alert('Error', errMessage(e)); }
+    setErr(false);
+    try { setData(await OrderApi.orderDetail(id)); } catch (e) { setErr(true); Alert.alert('Error', errMessage(e)); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
   const { order, items, history } = data;
 
@@ -42,6 +46,8 @@ export default function OrderDetailScreen({ route }) {
           <Pill label={order.order_status.replace(/_/g, ' ')} color={STATUS_COLOR[order.order_status] || colors.textMuted} />
         </Row>
         <Muted style={{ marginTop: 4 }}>{order.pharmacy_name}</Muted>
+        {order.created_at ? <Muted style={{ marginTop: 2 }}>Placed: {formatDateTime(order.created_at)}</Muted> : null}
+        {order.delivered_at ? <Muted style={{ marginTop: 2, color: colors.success }}>Delivered: {formatDateTime(order.delivered_at)}</Muted> : null}
         {order.rejection_reason ? <Muted style={{ color: colors.danger, marginTop: 4 }}>Rejected: {order.rejection_reason}</Muted> : null}
         {order.pharmacy_mobile ? (
           <AppButton title="Call pharmacy" icon="phone" variant="outline" color={colors.primary} style={{ marginTop: spacing.md }}
@@ -69,8 +75,11 @@ export default function OrderDetailScreen({ route }) {
         {history.map((h, idx) => (
           <Row key={h.id} style={[styles.histRow, idx > 0 && styles.itemBorder]}>
             <View style={styles.histDot} />
-            <Text style={styles.histStatus}>{h.status.replace(/_/g, ' ')}</Text>
-            {h.note ? <Muted style={{ flex: 1, textAlign: 'right' }}>{h.note}</Muted> : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.histStatus}>{h.status.replace(/_/g, ' ')}</Text>
+              {h.note ? <Muted style={{ marginTop: 2 }}>{h.note}</Muted> : null}
+            </View>
+            {h.created_at ? <Muted style={{ marginLeft: 8 }}>{formatDateTime(h.created_at)}</Muted> : null}
           </Row>
         ))}
       </Card>

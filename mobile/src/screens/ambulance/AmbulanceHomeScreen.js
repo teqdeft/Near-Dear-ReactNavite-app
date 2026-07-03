@@ -5,6 +5,7 @@ import { AmbulanceApi } from '../../api';
 import { Card, Pill, Muted, Row, Loader } from '../../components/UI';
 import Icon from '../../components/Icon';
 import GradientBackground from '../../components/GradientBackground';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font, radius, shadow } from '../../theme';
 
 const STATUS_COLOR = {
@@ -56,6 +57,7 @@ export default function AmbulanceHomeScreen({ navigation }) {
           <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.pickup_address}</Muted></Row>
           <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.drop_address}</Muted></Row>
           <Pill label={item.ambulance_type} color={colors.ambulance} style={{ marginTop: 8 }} />
+          {item.created_at ? <Muted style={{ marginTop: 6 }}>Requested: {formatDateTime(item.created_at)}</Muted> : null}
         </Card>
       )}
     />

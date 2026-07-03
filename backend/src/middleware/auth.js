@@ -9,7 +9,9 @@ const { USER_STATUS } = require('../constants/enums');
 async function authenticate(req, res, next) {
   try {
     const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    // Fall back to a ?token= query param — needed for <img>/<Image> elements
+    // (e.g. private prescription/document previews) that can't send headers.
+    const token = header.startsWith('Bearer ') ? header.slice(7) : (req.query.token || null);
     if (!token) throw ApiError.unauthorized('Missing access token');
 
     let decoded;

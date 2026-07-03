@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -40,6 +41,7 @@ export default function DriverTripsScreen() {
             </Row>
             <Muted style={{ marginTop: 6 }}>{item.pickup_address}</Muted>
             <Muted>{item.drop_address}</Muted>
+            {item.created_at ? <Muted style={{ marginTop: 4 }}>Requested: {formatDateTime(item.created_at)}</Muted> : null}
             {['accepted', 'on_the_way', 'picked_up'].includes(item.status) && (
               <AppButton title={`Call ${item.contact_mobile}`} icon="phone" variant="outline" color={colors.success}
                 style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${item.contact_mobile}`)} />

@@ -41,12 +41,14 @@ export function AuthProvider({ children }) {
   const completeLogin = useCallback(async ({ user: u, accessToken, refreshToken }) => {
     if (accessToken) await AsyncStorage.setItem(TOKEN_KEY, accessToken);
     if (refreshToken) await AsyncStorage.setItem(REFRESH_KEY, refreshToken);
-    setUser(u);
-    // Pull full profile (city etc.) right after login.
+    // Load the full user + profile together BEFORE entering the app, so we
+    // never flash the "complete your profile" screen in the gap between the
+    // basic user being set and the profile finishing loading. Only fall back to
+    // the basic user if /me fails.
     try {
       await loadMe();
     } catch (e) {
-      /* keep the basic user we already have */
+      setUser(u);
     }
   }, [loadMe]);
 

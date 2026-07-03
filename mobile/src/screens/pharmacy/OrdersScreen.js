@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { OrderApi } from '../../api';
 import { Card, Pill, Muted, Row, EmptyState, Loader, AppButton } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -41,6 +42,7 @@ export default function OrdersScreen({ navigation }) {
                 <Pill label={item.order_status.replace(/_/g, ' ')} color={STATUS_COLOR[item.order_status] || colors.textMuted} />
               </Row>
               <Muted style={{ marginTop: 4 }}>{item.pharmacy_name}</Muted>
+              {item.created_at ? <Muted style={{ marginTop: 2 }}>Placed: {formatDateTime(item.created_at)}</Muted> : null}
               <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
                 <Muted>{item.payment_method?.toUpperCase()}</Muted>
                 <Text style={styles.total}>₹{Number(item.total_amount).toFixed(0)}</Text>

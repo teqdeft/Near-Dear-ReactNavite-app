@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export function Field({ label, children }) {
   return (
@@ -78,6 +78,19 @@ export function Empty({ icon = '📭', title, sub }) {
   );
 }
 
+// Shown when a fetch fails — distinguishes a real error from genuinely empty
+// data, with an optional retry.
+export function ErrorState({ message = 'Couldn’t load this. Please try again.', onRetry }) {
+  return (
+    <div className="empty">
+      <div style={{ fontSize: 40 }}>⚠️</div>
+      <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>Something went wrong</div>
+      <div style={{ marginTop: 4 }}>{message}</div>
+      {onRetry && <Button variant="outline" style={{ marginTop: 14 }} onClick={onRetry}>Retry</Button>}
+    </div>
+  );
+}
+
 export function Modal({ open, onClose, title, children, width = 520 }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose?.();
@@ -99,4 +112,31 @@ export function Modal({ open, onClose, title, children, width = 520 }) {
 
 export function money(n) {
   return `₹${Number(n || 0).toFixed(0)}`;
+}
+
+// A small modal that collects a text reason — a proper replacement for
+// window.prompt (which can't be styled and treats cancel as an empty reason).
+export function ReasonModal({ open, title = 'Add a reason', label = 'Reason', placeholder = '', confirmLabel = 'Confirm', confirmVariant = 'danger', required = true, loading, onConfirm, onClose }) {
+  const [value, setValue] = useState('');
+  useEffect(() => { if (open) setValue(''); }, [open]);
+  if (!open) return null;
+  const submit = (e) => {
+    e.preventDefault();
+    if (required && !value.trim()) return;
+    onConfirm(value.trim());
+  };
+  return (
+    <Modal open={open} onClose={onClose} title={title} width={440}>
+      <form onSubmit={submit}>
+        <Field label={label}>
+          <textarea className="input" rows={3} value={value} autoFocus
+            onChange={(e) => setValue(e.target.value)} placeholder={placeholder} />
+        </Field>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <Button type="button" variant="ghost" onClick={onClose} style={{ flex: 1 }} disabled={loading}>Cancel</Button>
+          <Button type="submit" variant={confirmVariant} loading={loading} style={{ flex: 1 }} disabled={required && !value.trim()}>{confirmLabel}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
 }

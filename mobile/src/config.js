@@ -13,7 +13,7 @@
 const DEV_PORT = 4000;
 
 // Your PC's Wi-Fi LAN IP (phone must be on the same network).
-const API_HOST = '192.168.1.11';
+const API_HOST = '192.168.1.2';
 
 export const API_BASE_URL = `http://${API_HOST}:${DEV_PORT}/api/v1`;
 

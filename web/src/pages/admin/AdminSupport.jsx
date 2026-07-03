@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Button, Badge, Loader } from '../../components/UI';
+import { Button, Badge, Loader, ErrorState } from '../../components/UI';
 
 const NEXT = { open: 'in_progress', in_progress: 'resolved', resolved: 'closed' };
 
 export default function AdminSupport() {
-  const { data, loading, reload } = useAsync(() => AdminApi.tickets());
+  const { data, loading, error, reload } = useAsync(() => AdminApi.tickets());
   const [busyId, setBusyId] = useState(null);
 
   const advance = async (t) => {
@@ -20,6 +20,7 @@ export default function AdminSupport() {
   };
 
   if (loading) return <Loader />;
+  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
 
   return (

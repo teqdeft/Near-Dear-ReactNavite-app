@@ -1,9 +1,99 @@
 const db = require('../db/knex');
+const config = require('../config');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
-const { AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES } = require('../constants/enums');
+const { requireKyc } = require('../utils/requireKyc');
+const {
+  AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES,
+  AMBULANCE_APPROVAL, AMBULANCE_DOC_TYPE, DOC_STATUS, AMBULANCE_TYPE,
+} = require('../constants/enums');
+
+const fileUrl = (p) => `${config.appUrl}/api/v1/files/${p}`;
+
+// ---- Driver's own ambulance (vehicle) registration + KYC-style approval ----
+
+// The single ambulance a driver owns (self-registered).
+async function driverVehicle(userId) {
+  return db('ambulances').where({ driver_user_id: userId }).first();
+}
+
+// POST /ambulance/driver/vehicle  { vehicle_number, ambulance_type }
+const registerVehicle = asyncHandler(async (req, res) => {
+  if (req.user.role !== ROLES.AMBULANCE_DRIVER) throw ApiError.forbidden('Only ambulance drivers can register a vehicle');
+  const { vehicle_number, ambulance_type } = req.body;
+  if (!vehicle_number || !vehicle_number.trim()) throw ApiError.badRequest('Vehicle number is required');
+
+  const existing = await driverVehicle(req.user.id);
+  const patch = {
+    vehicle_number: vehicle_number.trim().toUpperCase(),
+    ambulance_type: Object.values(AMBULANCE_TYPE).includes(ambulance_type) ? ambulance_type : AMBULANCE_TYPE.BASIC,
+  };
+
+  let id;
+  if (existing) {
+    // Re-submitting details resets it to pending for re-review.
+    await db('ambulances').where({ id: existing.id }).update({
+      ...patch, approval_status: AMBULANCE_APPROVAL.PENDING, rejection_reason: null,
+    });
+    id = existing.id;
+  } else {
+    [id] = await db('ambulances').insert({
+      ...patch,
+      driver_user_id: req.user.id,
+      status: 'inactive',
+      approval_status: AMBULANCE_APPROVAL.PENDING,
+    });
+  }
+
+  // NOTE: admins are notified only once the driver uploads their first
+  // document (see uploadVehicleDocument) — a bare vehicle number isn't enough
+  // to review.
+  const vehicle = await db('ambulances').where({ id }).first();
+  return created(res, vehicle, 'Vehicle saved. Upload your documents to submit for approval.');
+});
+
+// GET /ambulance/driver/vehicle  — my vehicle + documents
+const myVehicle = asyncHandler(async (req, res) => {
+  const vehicle = await driverVehicle(req.user.id);
+  if (!vehicle) return ok(res, null);
+  const documents = await db('ambulance_documents').where({ ambulance_id: vehicle.id }).orderBy('id', 'desc');
+  return ok(res, { vehicle, documents: documents.map((d) => ({ ...d, url: fileUrl(d.file_url) })) });
+});
+
+// POST /ambulance/driver/vehicle/documents  (multipart: file + document_type)
+const uploadVehicleDocument = asyncHandler(async (req, res) => {
+  const vehicle = await driverVehicle(req.user.id);
+  if (!vehicle) throw ApiError.notFound('Register your vehicle first');
+  if (!req.file) throw ApiError.badRequest('A document file is required');
+  const documentType = Object.values(AMBULANCE_DOC_TYPE).includes(req.body.document_type)
+    ? req.body.document_type : AMBULANCE_DOC_TYPE.OTHER;
+  const relPath = `ambulance_docs/${req.file.filename}`;
+
+  const [id] = await db('ambulance_documents').insert({
+    ambulance_id: vehicle.id,
+    document_type: documentType,
+    file_url: relPath,
+    status: DOC_STATUS.PENDING,
+  });
+
+  // Notify admins once the first document lands — now the vehicle is a real,
+  // reviewable registration.
+  const [{ c: docCount }] = await db('ambulance_documents').where({ ambulance_id: vehicle.id }).count('* as c');
+  if (Number(docCount) === 1) {
+    const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
+    await Promise.all(admins.map((a) => notify(a.id, {
+      title: 'New ambulance registration',
+      message: `A driver registered vehicle ${vehicle.vehicle_number} — awaiting approval.`,
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: vehicle.id,
+    })));
+  }
+
+  const doc = await db('ambulance_documents').where({ id }).first();
+  return created(res, { ...doc, url: fileUrl(doc.file_url) }, 'Document uploaded');
+});
 
 // Status transitions a driver/admin may move a request through.
 const DRIVER_FLOW = [
@@ -47,28 +137,26 @@ const createRequest = asyncHandler(async (req, res) => {
     status: AMBULANCE_STATUS.REQUESTED,
   });
 
-  // Notify nearby drivers — first driver to accept handles the trip.
-  const drivers = await findNearbyDrivers(b.city);
-  for (const d of drivers) {
-    // eslint-disable-next-line no-await-in-loop
-    await notify(d.id, {
+  // Notify nearby drivers + admins concurrently — this is a time-critical
+  // emergency path, so avoid a serial notify per recipient.
+  const [drivers, admins] = await Promise.all([
+    findNearbyDrivers(b.city),
+    db('users').where({ role: ROLES.ADMIN }).select('id'),
+  ]);
+  await Promise.all([
+    ...drivers.map((d) => notify(d.id, {
       title: 'New ambulance request near you',
       message: `${b.patient_name} needs a ${b.ambulance_type || 'any'} ambulance${b.city ? ' in ' + b.city : ''}. Tap to accept.`,
       type: NOTIFICATION_TYPE.AMBULANCE,
       referenceId: id,
-    });
-  }
-  // Also keep admins informed.
-  const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
-  for (const a of admins) {
-    // eslint-disable-next-line no-await-in-loop
-    await notify(a.id, {
+    })),
+    ...admins.map((a) => notify(a.id, {
       title: 'New ambulance request',
       message: `${b.patient_name} needs an ambulance (${b.ambulance_type || 'any'}).`,
       type: NOTIFICATION_TYPE.AMBULANCE,
       referenceId: id,
-    });
-  }
+    })),
+  ]);
 
   const request = await db('ambulance_requests').where({ id }).first();
   return created(res, { ...request, notifiedDrivers: drivers.length }, `Request sent. ${drivers.length} nearby driver(s) notified.`);
@@ -129,6 +217,11 @@ const driverAvailable = asyncHandler(async (req, res) => {
 
 // POST /ambulance/requests/:id/accept  — first driver to accept takes the trip
 const acceptRequest = asyncHandler(async (req, res) => {
+  requireKyc(req, 'accept ambulance rides');
+  const vehicle = await driverVehicle(req.user.id);
+  if (!vehicle || vehicle.approval_status !== AMBULANCE_APPROVAL.APPROVED) {
+    throw ApiError.forbidden('Your ambulance must be approved by admin before you can accept rides.');
+  }
   const id = req.params.id;
   const request = await db('ambulance_requests').where({ id }).first();
   if (!request) throw ApiError.notFound('Request not found');
@@ -232,4 +325,5 @@ module.exports = {
   createRequest, myRequests, requestDetail, cancelRequest,
   driverRequests, driverAvailable, acceptRequest, updateStatus,
   updateLocation, trackRequest,
+  registerVehicle, myVehicle, uploadVehicleDocument,
 };

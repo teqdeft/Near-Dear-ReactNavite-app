@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
 import { CatalogApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
-import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState } from '../../components/UI';
 import { colors, spacing, font } from '../../theme';
 
 export default function MedicineDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const [m, setM] = useState(null);
+  const [err, setErr] = useState(false);
   const { addItem } = useCart();
 
-  useEffect(() => {
-    CatalogApi.medicineDetail(id).then(setM).catch((e) => Alert.alert('Error', errMessage(e)));
+  const load = useCallback(() => {
+    setErr(false);
+    return CatalogApi.medicineDetail(id).then(setM).catch((e) => { setErr(true); Alert.alert('Error', errMessage(e)); });
   }, [id]);
 
+  useEffect(() => { load(); }, [load]);
+
+  if (err && !m) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!m) return <Loader />;
 
   const add = (goToCart) => {

@@ -1,10 +1,12 @@
 import { AdminApi } from '../../api';
+import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Badge, Loader } from '../../components/UI';
+import { Badge, Loader, ErrorState } from '../../components/UI';
 
 export default function AdminBloodRequests() {
-  const { data, loading } = useAsync(() => AdminApi.bloodRequests());
+  const { data, loading, error, reload } = useAsync(() => AdminApi.bloodRequests());
   if (loading) return <Loader />;
+  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
 
   return (

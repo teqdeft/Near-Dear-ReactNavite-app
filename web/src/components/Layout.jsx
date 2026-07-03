@@ -5,6 +5,7 @@ const NAV = {
   admin: [
     { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
     { to: '/admin/pharmacies', label: 'Pharmacy approvals', icon: '🏪' },
+    { to: '/admin/ambulance-vehicles', label: 'Ambulance Vehicles', icon: '🚐' },
     { to: '/admin/users', label: 'Users', icon: '👥' },
     { to: '/admin/blood-requests', label: 'Blood requests', icon: '🩸' },
     { to: '/admin/ambulance', label: 'Ambulance', icon: '🚑' },
@@ -21,7 +22,7 @@ const NAV = {
 };
 
 const TITLES = {
-  '/admin': 'Dashboard', '/admin/pharmacies': 'Pharmacy approvals', '/admin/users': 'Users',
+  '/admin': 'Dashboard', '/admin/pharmacies': 'Pharmacy approvals', '/admin/ambulance-vehicles': 'Ambulance Vehicles', '/admin/users': 'Users',
   '/admin/blood-requests': 'Blood requests', '/admin/ambulance': 'Ambulance', '/admin/orders': 'Medicine orders',
   '/admin/support': 'Support', '/admin/audit': 'Audit logs',
   '/pharmacy': 'Dashboard', '/pharmacy/medicines': 'Medicines', '/pharmacy/orders': 'Orders', '/pharmacy/profile': 'Profile & documents',

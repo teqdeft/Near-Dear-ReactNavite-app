@@ -11,11 +11,16 @@ const fileUrl = (p) => `${config.appUrl}/api/v1/files/${p}`;
 const upload = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('A prescription file is required');
   const relPath = `prescriptions/${req.file.filename}`;
+  // Snapshot the owner's name + mobile so the prescription stays identifiable
+  // even if the user later edits their profile.
+  const owner = await db('users').where({ id: req.user.id }).first();
   const [id] = await db('prescriptions').insert({
     user_id: req.user.id,
     file_url: relPath,
     doctor_name: req.body.doctor_name || null,
     prescription_date: req.body.prescription_date || null,
+    patient_name_snapshot: owner?.name || null,
+    patient_mobile_snapshot: owner?.mobile || null,
     status: PRESCRIPTION_STATUS.UPLOADED,
   });
   const row = await db('prescriptions').where({ id }).first();

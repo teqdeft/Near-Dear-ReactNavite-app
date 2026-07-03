@@ -1,10 +1,12 @@
 import { AdminApi } from '../../api';
+import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Loader } from '../../components/UI';
+import { Loader, ErrorState } from '../../components/UI';
 
 export default function AdminAudit() {
-  const { data, loading } = useAsync(() => AdminApi.auditLogs());
+  const { data, loading, error, reload } = useAsync(() => AdminApi.auditLogs());
   if (loading) return <Loader />;
+  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
 
   return (

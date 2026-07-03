@@ -10,10 +10,26 @@ const categories = asyncHandler(async (req, res) => {
   return ok(res, rows);
 });
 
+// The city we should show pharmacies for: the user's profile city, else their
+// default (or most recent) saved address city. Returns null if none is set.
+async function resolveUserCity(userId) {
+  const profile = await db('user_profiles').where({ user_id: userId }).first();
+  if (profile && profile.city) return profile.city;
+  const address = await db('user_addresses')
+    .where({ user_id: userId })
+    .orderBy('is_default', 'desc')
+    .orderBy('id', 'desc')
+    .first();
+  return address ? address.city : null;
+}
+
 // GET /catalog/medicines?search=&category_id=&city=
 // Returns pharmacy listings (only from approved pharmacies, active listings).
+// When no explicit city is passed, results are scoped to the user's own city so
+// they only see pharmacies that can realistically serve them.
 const medicines = asyncHandler(async (req, res) => {
-  const { search, category_id, city } = req.query;
+  const { search, category_id } = req.query;
+  const city = req.query.city || await resolveUserCity(req.user.id);
   const q = db('pharmacy_medicines as pm')
     .join('pharmacies as ph', 'ph.id', 'pm.pharmacy_id')
     .leftJoin('medicines as m', 'm.id', 'pm.medicine_id')
@@ -41,7 +57,10 @@ const medicines = asyncHandler(async (req, res) => {
     });
   }
 
-  const rows = await q.orderBy('pm.id', 'desc').limit(200);
+  // Page through results (?page=) instead of silently truncating at a fixed cap.
+  const limit = Math.min(Number(req.query.limit) || 100, 200);
+  const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
+  const rows = await q.orderBy('pm.id', 'desc').limit(limit).offset(offset);
   // Normalize a display name.
   const data = rows.map((r) => ({ ...r, display_name: r.medicine_name || r.custom_name }));
   return ok(res, data);

@@ -3,8 +3,10 @@ import { FlatList, View, Text, StyleSheet, TouchableOpacity, RefreshControl } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NotificationApi } from '../../api';
+import { useAuth } from '../../store/AuthContext';
 import { Muted, Row, EmptyState, Loader, IconBadge } from '../../components/UI';
 import Icon from '../../components/Icon';
+import { timeAgo } from '../../utils/datetime';
 import { colors, spacing, font, radius } from '../../theme';
 
 const TYPE_ICON = {
@@ -15,7 +17,35 @@ const TYPE_ICON = {
   support: { icon: 'support', color: colors.info },
 };
 
-export default function NotificationsScreen() {
+// Where a notification should take the user when tapped. reference_id points to
+// the related entity (order / request id). Returns null when there is no
+// meaningful detail screen (e.g. generic admin alerts) or the target screen
+// isn't part of the current user's navigator.
+function notificationTarget(item, { isDriver, isDonor }) {
+  const id = item.reference_id;
+  if (isDriver) {
+    // The driver stack only registers the driver tabs + Support.
+    if (item.type === 'ambulance') return { screen: 'DriverTrips' };
+    if (item.type === 'support') return { screen: 'Support' };
+    return null;
+  }
+  switch (item.type) {
+    case 'medicine_order': return id ? { screen: 'OrderDetail', params: { id } } : null;
+    case 'ambulance': return id ? { screen: 'AmbulanceDetail', params: { id } } : null;
+    case 'blood':
+      // Donors act on nearby requests from the "Requests for me" list (accept /
+      // decline). The requester's contact stays hidden there until the donor
+      // accepts. Requesters instead track their own request in its detail page.
+      if (isDonor) return { screen: 'DonorRequests' };
+      return id ? { screen: 'BloodRequestDetail', params: { id } } : null;
+    case 'support': return { screen: 'Support' };
+    default: return null;
+  }
+}
+
+export default function NotificationsScreen({ navigation }) {
+  const { isDriver, user, donor } = useAuth();
+  const isDonor = !!donor || user?.role === 'donor';
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,7 +56,12 @@ export default function NotificationsScreen() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const markAll = async () => { try { await NotificationApi.markAllRead(); await load(); } catch (e) {} };
-  const tap = async (item) => { if (!item.is_read) { try { await NotificationApi.markRead(item.id); load(); } catch (e) {} } };
+  const tap = (item) => {
+    // Mark read in the background so navigation feels instant.
+    if (!item.is_read) { NotificationApi.markRead(item.id).then(load).catch(() => {}); }
+    const target = notificationTarget(item, { isDriver, isDonor });
+    if (target) navigation.navigate(target.screen, target.params);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -52,6 +87,7 @@ export default function NotificationsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemTitle}>{item.title}</Text>
                   <Muted style={{ marginTop: 2 }}>{item.message}</Muted>
+                  {item.created_at ? <Text style={styles.time}>{timeAgo(item.created_at)}</Text> : null}
                 </View>
                 {!item.is_read ? <View style={styles.dot} /> : null}
               </TouchableOpacity>
@@ -70,5 +106,6 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
   unread: { backgroundColor: '#EAF7F5' },
   itemTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  time: { fontSize: font.tiny, color: colors.textMuted, marginTop: 6 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginLeft: spacing.sm, marginTop: 4 },
 });

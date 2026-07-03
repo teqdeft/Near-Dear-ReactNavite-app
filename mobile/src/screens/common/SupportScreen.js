@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SupportApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const TOPICS = [
@@ -60,6 +61,7 @@ export default function SupportScreen() {
             <Pill label={t.status.replace('_', ' ')} color={STATUS_COLOR[t.status] || colors.textMuted} />
           </Row>
           <Muted style={{ marginTop: 4 }}>{t.message}</Muted>
+          {t.created_at ? <Muted style={{ marginTop: 4 }}>Raised: {formatDateTime(t.created_at)}</Muted> : null}
         </Card>
       ))}
     </ScrollView>

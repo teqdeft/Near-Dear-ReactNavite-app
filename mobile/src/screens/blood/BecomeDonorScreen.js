@@ -4,10 +4,11 @@ import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Muted, Row } from '../../components/UI';
+import KycGate from '../../components/KycGate';
 import { colors, spacing, font, BLOOD_GROUPS } from '../../theme';
 
 export default function BecomeDonorScreen({ navigation }) {
-  const { user, profile } = useAuth();
+  const { user, profile, aadhaarVerified } = useAuth();
   const [bloodGroup, setBloodGroup] = useState(profile?.blood_group || null);
   const [city, setCity] = useState(profile?.city || user?.city || '');
   const [pincode, setPincode] = useState('');
@@ -50,6 +51,8 @@ export default function BecomeDonorScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  if (!aadhaarVerified) return <KycGate navigation={navigation} action="register as a blood donor" />;
 
   return (
     <Screen scroll>

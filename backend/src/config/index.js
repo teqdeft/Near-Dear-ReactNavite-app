@@ -36,6 +36,17 @@ const config = {
     },
   },
 
+  // SMTP for email OTP. When OTP_PROVIDER is 'mock' (dev) the static devCode is
+  // used and no email is actually sent; set these to send real email OTPs.
+  smtp: {
+    host: str(process.env.SMTP_HOST, ''),
+    port: num(process.env.SMTP_PORT, 587),
+    secure: str(process.env.SMTP_SECURE, 'false') === 'true',
+    user: str(process.env.SMTP_USER, ''),
+    pass: str(process.env.SMTP_PASS, ''),
+    from: str(process.env.SMTP_FROM, 'NearDear <no-reply@neardear.app>'),
+  },
+
   aadhaar: {
     provider: str(process.env.AADHAAR_PROVIDER, 'mock'), // 'mock' | 'surepass'
     devOtp: str(process.env.AADHAAR_DEV_OTP, '123456'),

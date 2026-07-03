@@ -4,11 +4,11 @@ import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
 
-const FILTERS = ['', 'pending', 'approved', 'rejected', 'suspended'];
+const FILTERS = ['', 'pending', 'approved', 'rejected'];
 
-export default function AdminPharmacies() {
+export default function AdminAmbulanceVehicles() {
   const [filter, setFilter] = useState('');
-  const { data, loading, error, reload } = useAsync(() => AdminApi.pharmacies(filter), [filter]);
+  const { data, loading, error, reload } = useAsync(() => AdminApi.ambulanceVehicles(filter), [filter]);
   const [detailId, setDetailId] = useState(null);
 
   return (
@@ -24,17 +24,16 @@ export default function AdminPharmacies() {
       <div className="card" style={{ padding: 0 }}>
         {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
           <table className="table">
-            <thead><tr><th>Pharmacy</th><th>City</th><th>License</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Vehicle</th><th>Driver</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {(data || []).length === 0 ? (
-                <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No pharmacies.</td></tr>
-              ) : data.map((p) => (
-                <tr key={p.id}>
-                  <td><b>{p.pharmacy_name}</b><div className="muted">{p.owner_name} • {p.mobile}</div></td>
-                  <td>{p.city}</td>
-                  <td className="muted">{p.license_number}</td>
-                  <td><Badge value={p.approval_status} /></td>
-                  <td><Button size="sm" variant="outline" onClick={() => setDetailId(p.id)}>Review</Button></td>
+                <tr><td colSpan={4} className="muted" style={{ padding: 24 }}>No vehicles.</td></tr>
+              ) : data.map((v) => (
+                <tr key={v.id}>
+                  <td><b>{v.vehicle_number}</b><div className="muted">{v.ambulance_type}</div></td>
+                  <td>{v.driver_name}<div className="muted">{v.driver_mobile}</div></td>
+                  <td><Badge value={v.approval_status} /></td>
+                  <td><Button size="sm" variant="outline" onClick={() => setDetailId(v.id)}>Review</Button></td>
                 </tr>
               ))}
             </tbody>
@@ -42,7 +41,7 @@ export default function AdminPharmacies() {
         )}
       </div>
 
-      <Modal open={!!detailId} onClose={() => setDetailId(null)} title="Pharmacy review" width={640}>
+      <Modal open={!!detailId} onClose={() => setDetailId(null)} title="Vehicle review" width={640}>
         {detailId && <Review id={detailId} onChanged={() => { reload(); }} onClose={() => setDetailId(null)} />}
       </Modal>
     </>
@@ -50,28 +49,28 @@ export default function AdminPharmacies() {
 }
 
 function Review({ id, onChanged, onClose }) {
-  const { data, loading } = useAsync(() => AdminApi.pharmacyDetail(id), [id]);
+  const { data, loading } = useAsync(() => AdminApi.ambulanceVehicleDetail(id), [id]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [docUrls, setDocUrls] = useState({});
-  const [reasonFor, setReasonFor] = useState(null); // 'rejected' | 'suspended'
+  const [reasonFor, setReasonFor] = useState(null); // 'rejected'
 
   // Release document preview blob URLs when the review modal unmounts.
   useEffect(() => () => { Object.values(docUrls).forEach((u) => URL.revokeObjectURL(u)); }, [docUrls]);
 
   if (loading) return <Loader />;
-  const { pharmacy, documents } = data;
+  const { vehicle, documents } = data;
 
   const decide = async (status, reason) => {
     setBusy(true); setError('');
     try {
-      await AdminApi.reviewPharmacy(id, status, reason);
+      await AdminApi.reviewAmbulanceVehicle(id, status, reason);
       onChanged();
       onClose();
     } catch (e) { setError(errMessage(e)); setBusy(false); setReasonFor(null); }
   };
   const onDecide = (status) => {
-    if (status === 'rejected' || status === 'suspended') setReasonFor(status);
+    if (status === 'rejected') setReasonFor(status);
     else decide(status);
   };
 
@@ -86,14 +85,13 @@ function Review({ id, onChanged, onClose }) {
   return (
     <div>
       {error && <div className="alert error">{error}</div>}
-      <h3 style={{ fontSize: 18 }}>{pharmacy.pharmacy_name} <Badge value={pharmacy.approval_status} /></h3>
-      <p className="muted">{pharmacy.address}, {pharmacy.city} {pharmacy.pincode}</p>
+      <h3 style={{ fontSize: 18 }}>{vehicle.vehicle_number} <Badge value={vehicle.approval_status} /></h3>
+      <p className="muted">{vehicle.ambulance_type}</p>
       <table className="table" style={{ marginTop: 8 }}>
         <tbody>
-          <tr><td className="muted">Owner</td><td>{pharmacy.owner_name}</td></tr>
-          <tr><td className="muted">Mobile</td><td>{pharmacy.mobile}</td></tr>
-          <tr><td className="muted">License</td><td>{pharmacy.license_number}</td></tr>
-          <tr><td className="muted">GST</td><td>{pharmacy.gst_number || '—'}</td></tr>
+          <tr><td className="muted">Driver</td><td>{vehicle.driver_name}</td></tr>
+          <tr><td className="muted">Mobile</td><td>{vehicle.driver_mobile}</td></tr>
+          <tr><td className="muted">Aadhaar KYC</td><td><Badge value={vehicle.aadhaar_kyc_status} /></td></tr>
         </tbody>
       </table>
 
@@ -116,18 +114,15 @@ function Review({ id, onChanged, onClose }) {
       <div style={{ display: 'flex', gap: 8 }}>
         <Button variant="success" loading={busy} onClick={() => onDecide('approved')}>Approve</Button>
         <Button variant="danger" loading={busy} onClick={() => onDecide('rejected')}>Reject</Button>
-        {pharmacy.approval_status === 'approved' && (
-          <Button variant="ghost" loading={busy} onClick={() => onDecide('suspended')}>Suspend</Button>
-        )}
         <div style={{ flex: 1 }} />
         <Button variant="ghost" onClick={onClose}>Close</Button>
       </div>
 
       <ReasonModal
         open={!!reasonFor}
-        title={reasonFor === 'suspended' ? 'Suspend pharmacy' : 'Reject pharmacy'}
-        label={`Reason for ${reasonFor === 'suspended' ? 'suspension' : 'rejection'}`}
-        confirmLabel={reasonFor === 'suspended' ? 'Suspend' : 'Reject'}
+        title="Reject vehicle"
+        label="Reason for rejection"
+        confirmLabel="Reject"
         loading={busy}
         onConfirm={(reason) => decide(reasonFor, reason)}
         onClose={() => setReasonFor(null)}

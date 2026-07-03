@@ -4,6 +4,7 @@ import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
+import KycGate from '../../components/KycGate';
 import { colors, spacing, BLOOD_GROUPS } from '../../theme';
 
 const URGENCY = [
@@ -13,7 +14,7 @@ const URGENCY = [
 ];
 
 export default function CreateBloodRequestScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, aadhaarVerified } = useAuth();
   const [form, setForm] = useState({
     patient_name: '', patient_age: '', blood_group_required: null, units_required: '1',
     hospital_name: '', hospital_address: '', city: user?.city || '',
@@ -43,6 +44,8 @@ export default function CreateBloodRequestScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  if (!aadhaarVerified) return <KycGate navigation={navigation} action="request blood" />;
 
   return (
     <Screen scroll>

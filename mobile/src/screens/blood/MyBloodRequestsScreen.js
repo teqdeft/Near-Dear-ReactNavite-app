@@ -3,6 +3,7 @@ import { FlatList, Text, StyleSheet, View, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { Card, Pill, Muted, Row, EmptyState, Loader, AppButton } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -52,6 +53,8 @@ export default function MyBloodRequestsScreen({ navigation }) {
             <Muted style={{ marginLeft: 8 }}>{item.units_required} unit(s) • {item.hospital_name}</Muted>
           </Row>
           <Muted style={{ marginTop: 4 }}>{item.city} • urgency: {item.urgency_level}</Muted>
+          {item.required_at ? <Muted style={{ marginTop: 2 }}>Needed by: {formatDateTime(item.required_at)}</Muted> : null}
+          {item.created_at ? <Muted style={{ marginTop: 2 }}>Requested: {formatDateTime(item.created_at)}</Muted> : null}
         </Card>
       )}
     />

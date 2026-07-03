@@ -45,6 +45,10 @@ export default function LoginScreen({ navigation }) {
 
             <AppButton title="Log in" onPress={onLogin} loading={loading} style={{ marginTop: spacing.sm }} />
 
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignItems: 'center', marginTop: spacing.md }}>
+              <Text style={styles.link}>Forgot password?</Text>
+            </TouchableOpacity>
+
             <View style={styles.footer}>
               <Text style={styles.muted}>New to NearDear? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>

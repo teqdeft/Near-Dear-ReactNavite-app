@@ -267,6 +267,17 @@ const updateMedicine = asyncHandler(async (req, res) => {
   return ok(res, updated, 'Listing updated');
 });
 
+// DELETE /pharmacy/medicines/:id
+const deleteMedicine = asyncHandler(async (req, res) => {
+  const pharmacy = await requireOwnedPharmacy(req);
+  const row = await db('pharmacy_medicines').where({ id: req.params.id, pharmacy_id: pharmacy.id }).first();
+  if (!row) throw ApiError.notFound('Listing not found');
+  // Only the pharmacy's listing is removed; the master medicine and any order
+  // snapshots stay intact (medicine_order_items keeps its own name/price copy).
+  await db('pharmacy_medicines').where({ id: row.id }).del();
+  return ok(res, { id: row.id }, 'Medicine removed from your listings');
+});
+
 // POST /pharmacy/categories  — owner adds a category on the fly while listing.
 // Idempotent on slug: an existing category with the same slug is reused.
 const addCategory = asyncHandler(async (req, res) => {
@@ -289,26 +300,37 @@ const addCategory = asyncHandler(async (req, res) => {
 // GET /pharmacy/orders?status=
 const listOrders = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
-  const q = db('medicine_orders').where({ pharmacy_id: pharmacy.id });
-  if (req.query.status) q.andWhere('order_status', req.query.status);
-  const rows = await q.orderBy('id', 'desc');
+  const q = db('medicine_orders as o')
+    .join('users as u', 'u.id', 'o.user_id')
+    .where('o.pharmacy_id', pharmacy.id)
+    .select('o.*', 'u.name as customer_name', 'u.mobile as customer_mobile');
+  if (req.query.status) q.andWhere('o.order_status', req.query.status);
+  const limit = Math.min(Number(req.query.limit) || 100, 200);
+  const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
+  const rows = await q.orderBy('o.id', 'desc').limit(limit).offset(offset);
   return ok(res, rows);
 });
 
 // GET /pharmacy/orders/:id
 const orderDetail = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
-  const order = await db('medicine_orders').where({ id: req.params.id, pharmacy_id: pharmacy.id }).first();
+  const order = await db('medicine_orders as o')
+    .join('users as u', 'u.id', 'o.user_id')
+    .where({ 'o.id': req.params.id, 'o.pharmacy_id': pharmacy.id })
+    .select('o.*', 'u.name as customer_name', 'u.mobile as customer_mobile')
+    .first();
   if (!order) throw ApiError.notFound('Order not found');
-  const items = await db('medicine_order_items').where({ order_id: order.id });
-  let prescription = null;
-  if (order.prescription_id) {
-    prescription = await db('prescriptions').where({ id: order.prescription_id }).first();
-    if (prescription) prescription.url = fileUrl(prescription.file_url);
-  }
-  const address = order.delivery_address_id
-    ? await db('user_addresses').where({ id: order.delivery_address_id }).first()
-    : null;
+  // Independent reads — fetch them together.
+  const [items, prescription, address] = await Promise.all([
+    db('medicine_order_items').where({ order_id: order.id }),
+    order.prescription_id
+      ? db('prescriptions').where({ id: order.prescription_id }).first()
+      : Promise.resolve(null),
+    order.delivery_address_id
+      ? db('user_addresses').where({ id: order.delivery_address_id }).first()
+      : Promise.resolve(null),
+  ]);
+  if (prescription) prescription.url = fileUrl(prescription.file_url);
   return ok(res, { order, items, prescription, address });
 });
 
@@ -361,6 +383,6 @@ const reviewPrescription = asyncHandler(async (req, res) => {
 
 module.exports = {
   register, myPharmacy, uploadDocument, dashboard,
-  listMyMedicines, addMedicine, updateMedicine, addCategory,
+  listMyMedicines, addMedicine, updateMedicine, deleteMedicine, addCategory,
   listOrders, orderDetail, updateOrderStatus, reviewPrescription,
 };

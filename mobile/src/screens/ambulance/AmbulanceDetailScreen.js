@@ -3,13 +3,16 @@ import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, Loader } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState } from '../../components/UI';
 import Icon from '../../components/Icon';
 import LiveTrackingMap from '../../components/LiveTrackingMap';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
-// Statuses during which the ambulance is moving and worth live-tracking.
-const TRACKABLE = ['on_the_way', 'picked_up'];
+// Statuses during which the trip is live and worth showing the map — from the
+// moment a driver accepts (matches the driver's own "active trip" view), so the
+// requester can watch the ambulance approach.
+const TRACKABLE = ['accepted', 'on_the_way', 'picked_up'];
 
 const FLOW = ['requested', 'assigned', 'accepted', 'on_the_way', 'picked_up', 'completed'];
 const LABELS = {
@@ -22,9 +25,11 @@ export default function AmbulanceDetailScreen({ route }) {
   const [r, setR] = useState(null);
   const [live, setLive] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
 
   const load = useCallback(async () => {
-    try { setR(await AmbulanceApi.requestDetail(id)); } catch (e) { Alert.alert('Error', errMessage(e)); }
+    setErr(false);
+    try { setR(await AmbulanceApi.requestDetail(id)); } catch (e) { setErr(true); Alert.alert('Error', errMessage(e)); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -48,6 +53,7 @@ export default function AmbulanceDetailScreen({ route }) {
     if (live?.status && status && live.status !== status) load();
   }, [live?.status, status, load]);
 
+  if (err && !r) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!r) return <Loader />;
 
   const cancelled = r.status === 'cancelled';
@@ -73,6 +79,7 @@ export default function AmbulanceDetailScreen({ route }) {
         <Row style={{ marginTop: spacing.sm }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Pickup: {r.pickup_address}</Muted></Row>
         <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Drop: {r.drop_address}</Muted></Row>
         <Pill label={`Type: ${r.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
+        {r.created_at ? <Muted style={{ marginTop: spacing.sm }}>Requested: {formatDateTime(r.created_at)}</Muted> : null}
 
         {r.driver_name && (
           <View style={styles.driver}>

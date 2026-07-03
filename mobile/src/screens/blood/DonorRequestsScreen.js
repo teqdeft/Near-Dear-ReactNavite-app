@@ -4,7 +4,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
+
+const CLOSED_STATUSES = ['fulfilled', 'cancelled', 'expired'];
 
 export default function DonorRequestsScreen() {
   const [items, setItems] = useState(null);
@@ -55,12 +58,19 @@ export default function DonorRequestsScreen() {
             <Muted style={{ marginLeft: 8 }}>{item.units_required} unit(s)</Muted>
           </Row>
           <Muted style={{ marginTop: 4 }}>{item.hospital_name}, {item.city}</Muted>
+          {item.required_at ? <Muted style={{ marginTop: 2 }}>Needed by: {formatDateTime(item.required_at)}</Muted> : null}
+          {item.created_at ? <Muted style={{ marginTop: 2 }}>Requested: {formatDateTime(item.created_at)}</Muted> : null}
 
-          {item.response_status === 'pending' ? (
+          {CLOSED_STATUSES.includes(item.status) ? (
+            <Pill
+              label={item.status === 'fulfilled' ? 'Fulfilled ❤️' : `Request ${item.status}`}
+              color={item.status === 'fulfilled' ? colors.success : colors.textMuted}
+              style={{ marginTop: spacing.md }} />
+          ) : item.response_status === 'pending' ? (
             <Row style={{ marginTop: spacing.md }}>
-              <AppButton title="Accept" color={colors.success} loading={busyId === item.match_id}
+              <AppButton title="Accept" color={colors.success} loading={busyId === item.match_id} disabled={busyId === item.match_id}
                 style={{ flex: 1, marginRight: spacing.sm }} onPress={() => respond(item.match_id, 'accept')} />
-              <AppButton title="Decline" variant="outline" color={colors.danger}
+              <AppButton title="Decline" variant="outline" color={colors.danger} loading={busyId === item.match_id} disabled={busyId === item.match_id}
                 style={{ flex: 1 }} onPress={() => respond(item.match_id, 'decline')} />
             </Row>
           ) : item.contact_shared && item.contact_person_mobile ? (

@@ -52,6 +52,19 @@ const DOC_TYPE = {
 
 const DOC_STATUS = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' };
 
+// Approval state of a driver's self-registered ambulance (vehicle).
+const AMBULANCE_APPROVAL = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' };
+
+// Documents an ambulance driver uploads for their vehicle.
+const AMBULANCE_DOC_TYPE = {
+  RC: 'rc',
+  DRIVING_LICENSE: 'driving_license',
+  PERMIT: 'permit',
+  INSURANCE: 'insurance',
+  VEHICLE_PHOTO: 'vehicle_photo',
+  OTHER: 'other',
+};
+
 const MEDICINE_FORM = {
   TABLET: 'tablet',
   SYRUP: 'syrup',
@@ -149,6 +162,8 @@ module.exports = {
   PHARMACY_APPROVAL,
   DOC_TYPE,
   DOC_STATUS,
+  AMBULANCE_APPROVAL,
+  AMBULANCE_DOC_TYPE,
   MEDICINE_FORM,
   STOCK_STATUS,
   ACTIVE_STATUS,

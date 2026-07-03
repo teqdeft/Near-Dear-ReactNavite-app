@@ -3,8 +3,9 @@ import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle, EmptyState } from '../../components/UI';
 import Icon from '../../components/Icon';
+import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
 const RESP_COLOR = { accepted: colors.success, declined: colors.danger, pending: colors.warning, no_response: colors.textMuted };
@@ -13,13 +14,16 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
 
   const load = useCallback(async () => {
-    try { setData(await BloodApi.requestDetail(id)); } catch (e) { Alert.alert('Error', errMessage(e)); }
+    setErr(false);
+    try { setData(await BloodApi.requestDetail(id)); } catch (e) { setErr(true); Alert.alert('Error', errMessage(e)); }
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
   const { request, matches } = data;
 
@@ -48,6 +52,8 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
         </Row>
         <Row style={{ marginTop: spacing.sm }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6 }}>{request.hospital_name}</Muted></Row>
         <Row style={{ marginTop: 2 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>{request.hospital_address}, {request.city}</Muted></Row>
+        {request.required_at ? <Muted style={{ marginTop: spacing.sm }}>Needed by: {formatDateTime(request.required_at)}</Muted> : null}
+        {request.created_at ? <Muted style={{ marginTop: 2 }}>Requested: {formatDateTime(request.created_at)}</Muted> : null}
       </Card>
 
       <SectionTitle style={{ marginTop: spacing.lg }}>Matched donors ({matches.length})</SectionTitle>
@@ -74,9 +80,9 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
       {['open', 'matched'].includes(request.status) && (
         <View style={{ marginTop: spacing.lg }}>
           <AppButton title="Mark as fulfilled" color={colors.success}
-            loading={busy} onPress={() => act(() => BloodApi.fulfillRequest(id), 'Mark this request as fulfilled?')} />
+            loading={busy} disabled={busy} onPress={() => act(() => BloodApi.fulfillRequest(id), 'Mark this request as fulfilled?')} />
           <AppButton title="Cancel request" variant="outline" color={colors.danger} style={{ marginTop: spacing.sm }}
-            onPress={() => act(() => BloodApi.cancelRequest(id, 'Cancelled by user'), 'Cancel this request?')} />
+            loading={busy} disabled={busy} onPress={() => act(() => BloodApi.cancelRequest(id, 'Cancelled by user'), 'Cancel this request?')} />
         </View>
       )}
     </ScrollView>

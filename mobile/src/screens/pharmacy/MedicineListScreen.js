@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
@@ -7,26 +7,54 @@ import { Card, Pill, Muted, Row, EmptyState, Loader } from '../../components/UI'
 import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
+const PAGE_SIZE = 20;
+
 export default function MedicineListScreen({ route, navigation }) {
   const params = route.params || {};
   const [search, setSearch] = useState(params.search || '');
   const [items, setItems] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { addItem, count } = useCart();
 
   useLayoutEffect(() => {
     if (params.title) navigation.setOptions({ title: params.title });
   }, [navigation, params.title]);
 
-  const load = useCallback(async (q) => {
-    setItems(null);
-    try {
-      const data = await CatalogApi.medicines({
-        search: q ?? search ?? undefined,
-        category_id: params.category_id ?? undefined,
-      });
-      setItems(data || []);
-    } catch (e) { setItems([]); }
+  const fetchPage = useCallback(async (pageNum, q) => {
+    const data = await CatalogApi.medicines({
+      search: (q ?? search) || undefined,
+      category_id: params.category_id ?? undefined,
+      page: pageNum,
+      limit: PAGE_SIZE,
+    });
+    return data || [];
   }, [search, params.category_id]);
+
+  // First page (or a fresh search/category) — replaces the list.
+  const load = useCallback(async (q) => {
+    setItems(null); setPage(1); setHasMore(true);
+    try {
+      const rows = await fetchPage(1, q);
+      setItems(rows);
+      setHasMore(rows.length === PAGE_SIZE);
+    } catch (e) { setItems([]); setHasMore(false); }
+  }, [fetchPage]);
+
+  // Next page — appends as the user scrolls to the bottom.
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || items === null) return;
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      const rows = await fetchPage(next);
+      setItems((prev) => [...(prev || []), ...rows]);
+      setPage(next);
+      setHasMore(rows.length === PAGE_SIZE);
+    } catch (e) { /* keep what we already have */ }
+    finally { setLoadingMore(false); }
+  }, [loadingMore, hasMore, items, page, fetchPage]);
 
   useFocusEffect(useCallback(() => { load(); }, [params.category_id])); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -59,6 +87,9 @@ export default function MedicineListScreen({ route, navigation }) {
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 90, flexGrow: 1 }}
           data={items}
           keyExtractor={(i) => String(i.id)}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.pharmacy} style={{ marginVertical: spacing.lg }} /> : null}
           ListEmptyComponent={<EmptyState icon="pharmacy" title="No medicines found" subtitle="Try a different search or category." />}
           renderItem={({ item }) => (
             <Card style={styles.card} onPress={() => navigation.navigate('MedicineDetail', { id: item.id })}>

@@ -27,6 +27,10 @@ router.put('/ambulance-requests/:id/assign', c.assignAmbulance);
 router.post('/ambulance-providers', c.addProvider);
 router.post('/ambulances', c.addAmbulance);
 router.get('/ambulances', c.listAmbulances);
+// Driver self-registered vehicles awaiting approval
+router.get('/ambulance-vehicles', c.listAmbulanceVehicles);
+router.get('/ambulance-vehicles/:id', c.ambulanceVehicleDetail);
+router.put('/ambulance-vehicles/:id/review', c.reviewAmbulanceVehicle);
 router.get('/drivers', c.listDrivers);
 router.post('/drivers', c.createDriver);
 
