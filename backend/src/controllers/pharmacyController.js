@@ -26,6 +26,20 @@ async function requireOwnedPharmacy(req) {
   return pharmacy;
 }
 
+// Reject non-sensical pricing/stock so a client can't save a 0/negative price
+// or negative quantity (the web form guards this too, but never trust the client).
+function validatePricing(b) {
+  if (b.price !== undefined && !(Number(b.price) > 0)) {
+    throw ApiError.badRequest('Price must be greater than 0');
+  }
+  if (b.mrp !== undefined && b.mrp !== null && b.mrp !== '' && Number(b.mrp) < 0) {
+    throw ApiError.badRequest('MRP cannot be negative');
+  }
+  if (b.quantity_available !== undefined && b.quantity_available !== null && b.quantity_available !== '' && Number(b.quantity_available) < 0) {
+    throw ApiError.badRequest('Quantity cannot be negative');
+  }
+}
+
 // POST /pharmacy/register
 const register = asyncHandler(async (req, res) => {
   const existing = await ownedPharmacy(req.user.id);
@@ -141,6 +155,7 @@ const addMedicine = asyncHandler(async (req, res) => {
   if (!b.medicine_id && !name) {
     throw ApiError.badRequest('Provide either medicine_id or a medicine name');
   }
+  validatePricing(b);
 
   // Reject a listing this pharmacy already carries — matched against both the
   // linked master medicine's name and any legacy custom_name — so the
@@ -213,6 +228,7 @@ const updateMedicine = asyncHandler(async (req, res) => {
   const row = await db('pharmacy_medicines').where({ id: req.params.id, pharmacy_id: pharmacy.id }).first();
   if (!row) throw ApiError.notFound('Listing not found');
   const b = req.body;
+  validatePricing(b);
 
   // Listing-level fields live on pharmacy_medicines.
   const listingAllowed = ['category_id', 'price', 'mrp', 'stock_status', 'quantity_available', 'prescription_required', 'status'];
@@ -297,7 +313,7 @@ const addCategory = asyncHandler(async (req, res) => {
 
 // ---- Order management -------------------------------------------------
 
-// GET /pharmacy/orders?status=
+// GET /pharmacy/orders?status=&search=
 const listOrders = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
   const q = db('medicine_orders as o')
@@ -305,10 +321,63 @@ const listOrders = asyncHandler(async (req, res) => {
     .where('o.pharmacy_id', pharmacy.id)
     .select('o.*', 'u.name as customer_name', 'u.mobile as customer_mobile');
   if (req.query.status) q.andWhere('o.order_status', req.query.status);
+  if (req.query.search) {
+    const s = `%${req.query.search}%`;
+    q.andWhere((b) => b.whereILike('o.order_number', s).orWhereILike('u.name', s).orWhereILike('u.mobile', s));
+  }
   const limit = Math.min(Number(req.query.limit) || 100, 200);
   const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
   const rows = await q.orderBy('o.id', 'desc').limit(limit).offset(offset);
   return ok(res, rows);
+});
+
+// GET /pharmacy/sales  — revenue summary + 7-day trend + top medicines + low stock
+const salesSummary = asyncHandler(async (req, res) => {
+  const pharmacy = await requireOwnedPharmacy(req);
+  const pid = pharmacy.id;
+  const DELIVERED = ORDER_STATUS.DELIVERED;
+
+  const [totalRow, todayRow, statusCounts, topMedicines, dailyRows, lowStockRow] = await Promise.all([
+    db('medicine_orders').where({ pharmacy_id: pid, order_status: DELIVERED }).sum('total_amount as v').first(),
+    db('medicine_orders').where({ pharmacy_id: pid, order_status: DELIVERED }).andWhereRaw('DATE(created_at) = CURDATE()').sum('total_amount as v').first(),
+    db('medicine_orders').where({ pharmacy_id: pid }).select('order_status').count('* as c').groupBy('order_status'),
+    db('medicine_order_items as oi').join('medicine_orders as o', 'o.id', 'oi.order_id')
+      .where('o.pharmacy_id', pid).andWhere('o.order_status', DELIVERED)
+      .select('oi.medicine_name_snapshot as name').sum('oi.quantity as qty').sum('oi.total_price as revenue')
+      .groupBy('oi.medicine_name_snapshot').orderBy('qty', 'desc').limit(5),
+    db('medicine_orders').where({ pharmacy_id: pid, order_status: DELIVERED })
+      .andWhereRaw('created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)')
+      .select(db.raw('DATE(created_at) as day'), db.raw('SUM(total_amount) as revenue'), db.raw('COUNT(*) as orders'))
+      .groupByRaw('DATE(created_at)'),
+    db('pharmacy_medicines').where({ pharmacy_id: pid, status: 'active' })
+      .whereNotNull('quantity_available').andWhere('quantity_available', '<=', 10).count('* as c').first(),
+  ]);
+
+  const byStatus = Object.fromEntries(statusCounts.map((r) => [r.order_status, Number(r.c)]));
+  // Build a continuous 7-day series (fill missing days with 0), in local dates.
+  const byDay = {};
+  dailyRows.forEach((r) => { byDay[String(r.day).slice(0, 10)] = { revenue: Number(r.revenue), orders: Number(r.orders) }; });
+  const daily = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    daily.push({ day: key, revenue: byDay[key]?.revenue || 0, orders: byDay[key]?.orders || 0 });
+  }
+
+  return ok(res, {
+    total_revenue: Number(totalRow?.v || 0),
+    today_revenue: Number(todayRow?.v || 0),
+    orders: {
+      total: Object.values(byStatus).reduce((a, b) => a + b, 0),
+      delivered: byStatus[DELIVERED] || 0,
+      placed: byStatus[ORDER_STATUS.PLACED] || 0,
+      pending: (byStatus[ORDER_STATUS.PLACED] || 0) + (byStatus[ORDER_STATUS.ACCEPTED] || 0) + (byStatus[ORDER_STATUS.PREPARING] || 0) + (byStatus[ORDER_STATUS.OUT_FOR_DELIVERY] || 0),
+    },
+    top_medicines: topMedicines.map((m) => ({ name: m.name, qty: Number(m.qty), revenue: Number(m.revenue) })),
+    daily,
+    low_stock_count: Number(lowStockRow?.c || 0),
+  });
 });
 
 // GET /pharmacy/orders/:id
@@ -347,6 +416,19 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   ];
   if (!allowed.includes(status)) throw ApiError.badRequest('Invalid status for pharmacy');
 
+  // Guard the CURRENT state too — only forward moves are valid. Without this a
+  // cancelled/delivered/rejected order could be flipped to any status (e.g. a
+  // cancelled order marked "delivered", inflating sales).
+  const TRANSITIONS = {
+    [ORDER_STATUS.PLACED]: [ORDER_STATUS.ACCEPTED, ORDER_STATUS.REJECTED],
+    [ORDER_STATUS.ACCEPTED]: [ORDER_STATUS.PREPARING, ORDER_STATUS.REJECTED],
+    [ORDER_STATUS.PREPARING]: [ORDER_STATUS.OUT_FOR_DELIVERY],
+    [ORDER_STATUS.OUT_FOR_DELIVERY]: [ORDER_STATUS.DELIVERED],
+  };
+  if (!(TRANSITIONS[order.order_status] || []).includes(status)) {
+    throw ApiError.conflict(`Cannot change an order from "${order.order_status}" to "${status}".`);
+  }
+
   const update = { order_status: status };
   if (status === ORDER_STATUS.REJECTED) update.rejection_reason = reason || 'Rejected by pharmacy';
   if (status === ORDER_STATUS.DELIVERED) update.delivered_at = db.fn.now();
@@ -371,7 +453,14 @@ const reviewPrescription = asyncHandler(async (req, res) => {
   if (![PRESCRIPTION_STATUS.APPROVED, PRESCRIPTION_STATUS.REJECTED, PRESCRIPTION_STATUS.UNDER_REVIEW].includes(status)) {
     throw ApiError.badRequest('Invalid prescription status');
   }
-  const presc = await db('prescriptions').where({ id: req.params.id }).first();
+  // A pharmacy may review a prescription ONLY if it's attached to one of its
+  // own orders — otherwise any pharmacy could approve/reject any user's Rx by id.
+  const presc = await db('prescriptions as pr')
+    .join('medicine_orders as o', 'o.prescription_id', 'pr.id')
+    .where('pr.id', req.params.id)
+    .andWhere('o.pharmacy_id', pharmacy.id)
+    .select('pr.*')
+    .first();
   if (!presc) throw ApiError.notFound('Prescription not found');
   await db('prescriptions').where({ id: presc.id }).update({
     status,
@@ -384,5 +473,5 @@ const reviewPrescription = asyncHandler(async (req, res) => {
 module.exports = {
   register, myPharmacy, uploadDocument, dashboard,
   listMyMedicines, addMedicine, updateMedicine, deleteMedicine, addCategory,
-  listOrders, orderDetail, updateOrderStatus, reviewPrescription,
+  listOrders, orderDetail, updateOrderStatus, reviewPrescription, salesSummary,
 };

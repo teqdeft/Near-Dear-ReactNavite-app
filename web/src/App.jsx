@@ -20,6 +20,7 @@ import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard';
 import PharmacyMedicines from './pages/pharmacy/PharmacyMedicines';
 import PharmacyOrders from './pages/pharmacy/PharmacyOrders';
 import PharmacyProfile from './pages/pharmacy/PharmacyProfile';
+import NotificationsPage from './pages/NotificationsPage';
 
 function homeFor(user) {
   return user?.role === 'admin' ? '/admin' : '/pharmacy';
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/admin/ambulance" element={<AdminAmbulance />} />
         <Route path="/admin/orders" element={<AdminOrders />} />
         <Route path="/admin/support" element={<AdminSupport />} />
+        <Route path="/admin/notifications" element={<NotificationsPage />} />
         <Route path="/admin/audit" element={<AdminAudit />} />
       </Route>
 
@@ -65,6 +67,7 @@ export default function App() {
         <Route path="/pharmacy" element={<PharmacyDashboard />} />
         <Route path="/pharmacy/medicines" element={<PharmacyMedicines />} />
         <Route path="/pharmacy/orders" element={<PharmacyOrders />} />
+        <Route path="/pharmacy/notifications" element={<NotificationsPage />} />
         <Route path="/pharmacy/profile" element={<PharmacyProfile />} />
       </Route>
 

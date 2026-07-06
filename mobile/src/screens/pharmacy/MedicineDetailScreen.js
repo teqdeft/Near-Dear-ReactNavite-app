@@ -23,12 +23,14 @@ export default function MedicineDetailScreen({ route, navigation }) {
   if (!m) return <Loader />;
 
   const add = (goToCart) => {
-    addItem({
+    const switched = addItem({
       pharmacy_medicine_id: m.id, pharmacy_id: m.pharmacy_id, pharmacy_name: m.pharmacy_name,
       name: m.display_name, price: m.price, prescription_required: !!m.prescription_required,
     });
     if (goToCart) navigation.navigate('Cart');
-    else Alert.alert('Added to cart', `${m.display_name} added.`);
+    else if (switched) {
+      Alert.alert('Cart cleared', `Your cart can only hold items from one pharmacy, so it was cleared. ${m.display_name} added.`);
+    } else Alert.alert('Added to cart', `${m.display_name} added.`);
   };
 
   return (

@@ -23,10 +23,21 @@ const serve = asyncHandler(async (req, res) => {
   const isPharmacy = user.role === ROLES.PHARMACY_OWNER || user.role === ROLES.PHARMACY_STAFF;
 
   if (relPath.startsWith('prescriptions/')) {
-    // Owner, any pharmacy (needs to review prescriptions), or admin.
+    // Owner, admin, or a pharmacy that has an ORDER referencing this prescription
+    // (so a pharmacy can't read prescriptions for orders it doesn't handle).
     const presc = await db('prescriptions').where({ file_url: relPath }).first();
     const isOwner = presc && presc.user_id === user.id;
-    if (!isAdmin && !isPharmacy && !isOwner) throw ApiError.forbidden();
+    let pharmacyMayView = false;
+    if (isPharmacy && presc) {
+      const myPharmacy = await db('pharmacies').where({ owner_user_id: user.id }).first();
+      if (myPharmacy) {
+        const linkedOrder = await db('medicine_orders')
+          .where({ prescription_id: presc.id, pharmacy_id: myPharmacy.id })
+          .first();
+        pharmacyMayView = !!linkedOrder;
+      }
+    }
+    if (!isAdmin && !isOwner && !pharmacyMayView) throw ApiError.forbidden();
   } else if (relPath.startsWith('pharmacy_docs/')) {
     // Admin or the pharmacy that owns the document.
     const doc = await db('pharmacy_documents as d')

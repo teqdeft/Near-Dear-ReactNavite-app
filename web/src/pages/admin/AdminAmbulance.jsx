@@ -19,11 +19,13 @@ export default function AdminAmbulance() {
 
 function Requests() {
   const { data, loading, reload } = useAsync(() => AdminApi.ambulanceRequests());
-  const { data: ambulances } = useAsync(() => AdminApi.ambulances());
+  const { data: ambulances, reload: reloadAmbulances } = useAsync(() => AdminApi.ambulances());
   const [assignFor, setAssignFor] = useState(null);
 
   if (loading) return <Loader />;
   const rows = data || [];
+  // Only ambulances that aren't already on another trip can be assigned.
+  const availableAmbulances = (ambulances || []).filter((a) => a.status === 'available');
 
   return (
     <>
@@ -52,8 +54,8 @@ function Requests() {
 
       <Modal open={!!assignFor} onClose={() => setAssignFor(null)} title="Assign ambulance">
         {assignFor && (
-          <AssignForm request={assignFor} ambulances={ambulances || []}
-            onDone={() => { setAssignFor(null); reload(); }} />
+          <AssignForm request={assignFor} ambulances={availableAmbulances}
+            onDone={() => { setAssignFor(null); reload(); reloadAmbulances(); }} />
         )}
       </Modal>
     </>
@@ -66,7 +68,7 @@ function AssignForm({ request, ambulances, onDone }) {
   const [error, setError] = useState('');
 
   const submit = async () => {
-    if (!ambulanceId) return setError('No ambulances available. Add one in the Fleet tab first.');
+    if (!ambulanceId) return setError('No free ambulances right now — every vehicle is already on a trip. Free one up or add a new vehicle in the Fleet tab.');
     setBusy(true); setError('');
     try {
       await AdminApi.assignAmbulance(request.id, { ambulance_id: Number(ambulanceId) });
@@ -81,7 +83,7 @@ function AssignForm({ request, ambulances, onDone }) {
       <div className="field">
         <label>Choose ambulance (driver is notified automatically)</label>
         <select className="select" value={ambulanceId} onChange={(e) => setAmbulanceId(e.target.value)}>
-          {ambulances.length === 0 && <option value="">No ambulances yet</option>}
+          {ambulances.length === 0 && <option value="">No free ambulances available</option>}
           {ambulances.map((a) => (
             <option key={a.id} value={a.id}>{a.vehicle_number} • {a.ambulance_type} {a.driver_name ? `• ${a.driver_name}` : ''}</option>
           ))}

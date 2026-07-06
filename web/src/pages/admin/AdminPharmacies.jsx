@@ -114,8 +114,15 @@ function Review({ id, onChanged, onClose }) {
 
       <div className="divider" />
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant="success" loading={busy} onClick={() => onDecide('approved')}>Approve</Button>
-        <Button variant="danger" loading={busy} onClick={() => onDecide('rejected')}>Reject</Button>
+        {/* Only offer decisions valid from the current state (mirrors backend
+            transition guard): an approved pharmacy is disabled via Suspend, not
+            re-rejected; a settled pharmacy isn't re-approved redundantly. */}
+        {pharmacy.approval_status !== 'approved' && (
+          <Button variant="success" loading={busy} onClick={() => onDecide('approved')}>Approve</Button>
+        )}
+        {['pending', 'suspended'].includes(pharmacy.approval_status) && (
+          <Button variant="danger" loading={busy} onClick={() => onDecide('rejected')}>Reject</Button>
+        )}
         {pharmacy.approval_status === 'approved' && (
           <Button variant="ghost" loading={busy} onClick={() => onDecide('suspended')}>Suspend</Button>
         )}

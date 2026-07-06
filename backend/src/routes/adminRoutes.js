@@ -11,6 +11,7 @@ router.get('/dashboard', c.dashboard);
 // Users
 router.get('/users', c.listUsers);
 router.put('/users/:id/status', c.setUserStatus);
+router.delete('/users/:id', c.deleteUser);
 
 // Pharmacies
 router.get('/pharmacies', c.listPharmacies);

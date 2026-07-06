@@ -62,11 +62,20 @@ const placeOrder = asyncHandler(async (req, res) => {
     });
   }
 
-  // Enforce prescription requirement at checkout.
+  // Prescription requirement at checkout: the user must ATTACH a prescription
+  // they own — but it does NOT need to be approved yet. The pharmacy reviews it
+  // after the order is placed and then accepts or rejects the order.
   if (prescriptionNeeded) {
     if (!prescription_id) throw ApiError.badRequest('This order requires a prescription. Please upload one.');
     const presc = await db('prescriptions').where({ id: prescription_id, user_id: userId }).first();
     if (!presc) throw ApiError.badRequest('Prescription not found');
+  }
+
+  // Delivery address must belong to the ordering user (else it's an IDOR that
+  // leaks another user's address to the pharmacy).
+  if (delivery_address_id) {
+    const addr = await db('user_addresses').where({ id: delivery_address_id, user_id: userId }).first();
+    if (!addr) throw ApiError.badRequest('Delivery address not found');
   }
 
   const total = subtotal + Number(delivery_fee || 0);

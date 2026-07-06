@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import client, { TOKEN_KEY, REFRESH_KEY, clearTokens } from '../api/client';
+import client, { TOKEN_KEY, REFRESH_KEY, clearTokens, setSessionExpiredHandler } from '../api/client';
 import { AuthApi } from '../api';
 
 const AuthContext = createContext(null);
@@ -37,6 +38,24 @@ export function AuthProvider({ children }) {
       }
     })();
   }, [loadMe]);
+
+  // When the API layer detects the session is invalid (e.g. the account was
+  // deleted by an admin), force a logout and tell the user.
+  useEffect(() => {
+    setSessionExpiredHandler((message) => {
+      setUser(null);
+      setProfile(null);
+      setDonor(null);
+      const deleted = /no longer exists|deleted|not found/i.test(message || '');
+      Alert.alert(
+        deleted ? 'Account deleted' : 'Signed out',
+        deleted
+          ? 'Your account has been deleted. You have been logged out.'
+          : 'Your session has ended. Please log in again.',
+      );
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
 
   const completeLogin = useCallback(async ({ user: u, accessToken, refreshToken }) => {
     if (accessToken) await AsyncStorage.setItem(TOKEN_KEY, accessToken);

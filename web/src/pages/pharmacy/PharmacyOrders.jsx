@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PharmacyApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
@@ -11,16 +12,66 @@ const NEXT_ACTIONS = {
   out_for_delivery: [{ to: 'delivered', label: 'Mark delivered', variant: 'success' }],
 };
 
+const FILTERS = [
+  ['', 'All'],
+  ['placed', 'Placed'],
+  ['accepted', 'Accepted'],
+  ['preparing', 'Preparing'],
+  ['out_for_delivery', 'Out for delivery'],
+  ['delivered', 'Delivered'],
+  ['rejected', 'Rejected'],
+];
+
 export default function PharmacyOrders() {
-  const { data, loading, error, reload } = useAsync(() => PharmacyApi.orders());
+  // Filter is driven by the URL (?status=…) so dashboard KPI tiles can deep-link
+  // straight to a pre-filtered list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = searchParams.get('status') || '';
+  const setFilter = (f) => setSearchParams(f ? { status: f } : {}, { replace: true });
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const { data, loading, error, reload } = useAsync(
+    () => PharmacyApi.orders({ status: filter || undefined, search: query || undefined }),
+    [filter, query],
+  );
   const [detail, setDetail] = useState(null);
 
-  if (loading) return <Loader />;
-  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
+  // Deep-link: /pharmacy/orders?order=<id> opens that order's detail modal
+  // (used when a notification about an order is clicked).
+  useEffect(() => {
+    const o = searchParams.get('order');
+    if (o) setDetail(Number(o));
+  }, [searchParams]);
+
+  const closeDetail = () => {
+    setDetail(null);
+    if (searchParams.get('order')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('order');
+      setSearchParams(next, { replace: true });
+    }
+  };
+
   const rows = data || [];
 
   return (
     <>
+      <div className="toolbar">
+        {FILTERS.map(([f, label]) => (
+          <span key={f || 'all'} className={'tab' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div className="toolbar">
+        <input className="input" style={{ maxWidth: 260 }} placeholder="Search order no, name or mobile…"
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && setQuery(search)} />
+        <Button variant="outline" onClick={() => setQuery(search)}>Search</Button>
+      </div>
+
+      {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
           <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Payment</th><th>Total</th><th>Placed</th><th></th></tr></thead>
@@ -41,9 +92,10 @@ export default function PharmacyOrders() {
           </tbody>
         </table>
       </div>
+      )}
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title="Order details" width={620}>
-        {detail && <OrderDetail id={detail} onChanged={() => { reload(); }} onClose={() => setDetail(null)} />}
+      <Modal open={!!detail} onClose={closeDetail} title="Order details" width={620}>
+        {detail && <OrderDetail id={detail} onChanged={() => { reload(); }} onClose={closeDetail} />}
       </Modal>
     </>
   );

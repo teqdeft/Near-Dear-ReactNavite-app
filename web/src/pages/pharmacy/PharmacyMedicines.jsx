@@ -25,6 +25,8 @@ export default function PharmacyMedicines() {
       })
     : rows;
 
+  const lowStockCount = rows.filter((m) => m.status === 'active' && m.quantity_available != null && m.quantity_available <= 10).length;
+
   return (
     <>
       <div className="toolbar">
@@ -41,6 +43,12 @@ export default function PharmacyMedicines() {
         />
         <Button onClick={() => setOpen(true)}>＋ Add medicine</Button>
       </div>
+
+      {lowStockCount > 0 && (
+        <div className="alert" style={{ background: '#FFF4E5', color: '#8A5300', marginBottom: 12 }}>
+          ⚠️ {lowStockCount} medicine(s) low on stock.
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
@@ -70,6 +78,7 @@ function MedicineRow({ m, categories, onReloadCategories, onChange }) {
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState('');
   const name = m.master_name || m.custom_name;
+  const lowStock = m.quantity_available != null && m.quantity_available <= 10;
 
   const toggleStock = async () => {
     setBusy(true); setErr('');
@@ -100,7 +109,11 @@ function MedicineRow({ m, categories, onReloadCategories, onChange }) {
       <td className="muted">{m.category_name || '—'}</td>
       <td>{money(m.price)}</td>
       <td className="muted">{m.mrp ? money(m.mrp) : '—'}</td>
-      <td className="muted">{m.quantity_available ?? '—'}</td>
+      <td className={lowStock ? undefined : 'muted'}>
+        {lowStock
+          ? <span className="badge amber">{m.quantity_available} left</span>
+          : (m.quantity_available ?? '—')}
+      </td>
       <td><Badge value={m.stock_status} /></td>
       <td>{m.prescription_required ? <span className="badge red">Rx</span> : <span className="muted">No</span>}</td>
       <td><Badge value={m.status} /></td>
@@ -273,6 +286,9 @@ function AddMedicine({ categories, onReloadCategories, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.custom_name || !form.price) return setError('Name and price are required.');
+    if (!(Number(form.price) > 0)) return setError('Price must be greater than 0.');
+    if (form.mrp && Number(form.mrp) < 0) return setError('MRP cannot be negative.');
+    if (form.quantity_available && Number(form.quantity_available) < 0) return setError('Quantity cannot be negative.');
     setBusy(true); setError('');
     try {
       await PharmacyApi.addMedicine({
@@ -351,6 +367,9 @@ function EditMedicine({ m, categories, onReloadCategories, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.price) return setError('Name and price are required.');
+    if (!(Number(form.price) > 0)) return setError('Price must be greater than 0.');
+    if (form.mrp && Number(form.mrp) < 0) return setError('MRP cannot be negative.');
+    if (form.quantity_available && Number(form.quantity_available) < 0) return setError('Quantity cannot be negative.');
     setBusy(true); setError('');
     try {
       await PharmacyApi.updateMedicine(m.id, {

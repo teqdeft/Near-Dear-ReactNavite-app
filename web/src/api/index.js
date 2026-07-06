@@ -7,6 +7,9 @@ export const AuthApi = {
   login: (mobile, password) => data(client.post('/auth/admin-login', { mobile, password })),
   registerPharmacy: (payload) => data(client.post('/auth/register-pharmacy', payload)),
   me: () => data(client.get('/auth/me')),
+  forgotPasswordRequestOtp: (mobile) => full(client.post('/auth/forgot-password/request-otp', { mobile, channel: 'sms' })),
+  forgotPasswordReset: (mobile, code, newPassword) => data(client.post('/auth/forgot-password/reset', { mobile, channel: 'sms', code, newPassword })),
+  changePassword: (payload) => data(client.post('/auth/change-password', payload)),
 };
 
 export const PharmacyApi = {
@@ -15,12 +18,13 @@ export const PharmacyApi = {
   uploadDocument: (formData) =>
     data(client.post('/pharmacy/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
   dashboard: () => data(client.get('/pharmacy/dashboard')),
+  sales: () => data(client.get('/pharmacy/sales')),
   medicines: () => data(client.get('/pharmacy/medicines')),
   addMedicine: (payload) => data(client.post('/pharmacy/medicines', payload)),
   updateMedicine: (id, payload) => data(client.put(`/pharmacy/medicines/${id}`, payload)),
   deleteMedicine: (id) => data(client.delete(`/pharmacy/medicines/${id}`)),
   addCategory: (name) => data(client.post('/pharmacy/categories', { name })),
-  orders: (status) => data(client.get('/pharmacy/orders', { params: status ? { status } : {} })),
+  orders: (params) => data(client.get('/pharmacy/orders', { params: params || {} })),
   orderDetail: (id) => data(client.get(`/pharmacy/orders/${id}`)),
   updateOrderStatus: (id, status, reason) => data(client.put(`/pharmacy/orders/${id}/status`, { status, reason })),
   reviewPrescription: (id, status, reason) => data(client.put(`/pharmacy/prescriptions/${id}/review`, { status, reason })),
@@ -30,10 +34,17 @@ export const CatalogApi = {
   categories: () => data(client.get('/catalog/categories')),
 };
 
+export const NotificationApi = {
+  list: () => data(client.get('/notifications')),
+  markRead: (id) => data(client.put(`/notifications/${id}/read`)),
+  markAllRead: () => data(client.put('/notifications/read-all')),
+};
+
 export const AdminApi = {
   dashboard: () => data(client.get('/admin/dashboard')),
   users: (params) => data(client.get('/admin/users', { params })),
   setUserStatus: (id, status) => data(client.put(`/admin/users/${id}/status`, { status })),
+  deleteUser: (id) => data(client.delete(`/admin/users/${id}`)),
   pharmacies: (status) => data(client.get('/admin/pharmacies', { params: status ? { status } : {} })),
   pharmacyDetail: (id) => data(client.get(`/admin/pharmacies/${id}`)),
   reviewPharmacy: (id, status, reason) => data(client.put(`/admin/pharmacies/${id}/review`, { status, reason })),

@@ -23,6 +23,7 @@ import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
 import DriverDashboardScreen from '../screens/driver/DriverDashboardScreen';
 import DriverTripsScreen from '../screens/driver/DriverTripsScreen';
 import DriverVehicleScreen from '../screens/driver/DriverVehicleScreen';
+import DriverTripDetailScreen from '../screens/driver/DriverTripDetailScreen';
 
 // Tabs
 import HomeScreen from '../screens/HomeScreen';
@@ -54,6 +55,9 @@ import OrderDetailScreen from '../screens/pharmacy/OrderDetailScreen';
 
 // Common
 import SupportScreen from '../screens/common/SupportScreen';
+import PrivacyPolicyScreen from '../screens/common/PrivacyPolicyScreen';
+import TermsConditionsScreen from '../screens/common/TermsConditionsScreen';
+import EmergencyHelpScreen from '../screens/common/EmergencyHelpScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -105,6 +109,9 @@ export default function RootNavigator() {
           <Stack.Screen name="Otp" component={OtpScreen} options={{ title: 'Verify OTP' }} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot password' }} />
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset password' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+          <Stack.Screen name="Terms" component={TermsConditionsScreen} options={{ title: 'Terms & Conditions' }} />
+          <Stack.Screen name="EmergencyHelp" component={EmergencyHelpScreen} options={{ title: 'Emergency Help' }} />
         </>
       ) : !profileComplete ? (
         <>
@@ -115,6 +122,10 @@ export default function RootNavigator() {
         <>
           <Stack.Screen name="Main" component={DriverTabs} options={{ headerShown: false }} />
           <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} options={{ title: 'My Ambulance' }} />
+          <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} options={{ title: 'Trip details' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+          <Stack.Screen name="Terms" component={TermsConditionsScreen} options={{ title: 'Terms & Conditions' }} />
+          <Stack.Screen name="EmergencyHelp" component={EmergencyHelpScreen} options={{ title: 'Emergency Help' }} />
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change password' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
           <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
@@ -149,6 +160,9 @@ export default function RootNavigator() {
 
           {/* Common */}
           <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+          <Stack.Screen name="Terms" component={TermsConditionsScreen} options={{ title: 'Terms & Conditions' }} />
+          <Stack.Screen name="EmergencyHelp" component={EmergencyHelpScreen} options={{ title: 'Emergency Help' }} />
         </>
       )}
     </Stack.Navigator>

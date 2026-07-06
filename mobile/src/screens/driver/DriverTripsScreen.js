@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
@@ -12,7 +13,7 @@ const STATUS_COLOR = {
   completed: colors.success, cancelled: colors.danger,
 };
 
-export default function DriverTripsScreen() {
+export default function DriverTripsScreen({ navigation }) {
   const [items, setItems] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -34,7 +35,7 @@ export default function DriverTripsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={<EmptyState icon="ambulance" title="No trips yet" subtitle="Accepted requests show up here." />}
         renderItem={({ item }) => (
-          <Card style={styles.card}>
+          <Card style={styles.card} onPress={() => navigation.navigate('DriverTripDetail', { trip: item })}>
             <Row style={{ justifyContent: 'space-between' }}>
               <Text style={styles.patient}>{item.patient_name}</Text>
               <Pill label={item.status.replace(/_/g, ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
@@ -46,6 +47,10 @@ export default function DriverTripsScreen() {
               <AppButton title={`Call ${item.contact_mobile}`} icon="phone" variant="outline" color={colors.success}
                 style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${item.contact_mobile}`)} />
             )}
+            <Row style={{ marginTop: 8, alignItems: 'center' }}>
+              <Icon name="next" size={16} color={colors.ambulance} />
+              <Text style={styles.viewHint}>Tap for full details</Text>
+            </Row>
           </Card>
         )}
       />
@@ -57,4 +62,5 @@ const styles = StyleSheet.create({
   header: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   card: { marginBottom: spacing.md },
   patient: { fontSize: font.body, fontWeight: font.bold, color: colors.text },
+  viewHint: { color: colors.ambulance, fontWeight: font.semibold, fontSize: font.tiny, marginLeft: 4 },
 });

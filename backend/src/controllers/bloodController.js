@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
+const { citiesMatch, cityMatchRaw } = require('../utils/cityMatch');
 const {
   ROLES, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
 } = require('../constants/enums');
@@ -19,10 +20,11 @@ async function matchOpenRequestsToDonor(donor) {
   if (!donor || !donor.blood_group || !donor.city) return 0;
   if (!donor.is_available || donor.status !== DONOR_STATUS.ACTIVE) return 0;
 
+  const donorCity = cityMatchRaw('city', donor.city);
   const requests = await db('blood_requests')
     .where({ blood_group_required: donor.blood_group })
     .whereIn('status', ACTIVE_REQUEST_STATUSES)
-    .whereRaw('LOWER(city) = LOWER(?)', [donor.city])
+    .whereRaw(donorCity.clause, donorCity.bindings)
     .andWhere('requester_id', '!=', donor.user_id)
     .whereNotExists(function subquery() {
       this.select('*').from('blood_request_matches as m')
@@ -195,10 +197,12 @@ const createRequest = asyncHandler(async (req, res) => {
     status: BLOOD_REQUEST_STATUS.OPEN,
   });
 
-  // Matching: available donors, same blood group, same city, excluding the requester.
+  // Matching: available donors, same blood group, overlapping city (handles
+  // adjacent/combined cities like "Chandigarh mohali"), excluding the requester.
+  const reqCity = cityMatchRaw('city', b.city);
   const donors = await db('donor_profiles')
     .where({ blood_group: b.blood_group_required, is_available: true, status: DONOR_STATUS.ACTIVE })
-    .whereRaw('LOWER(city) = LOWER(?)', [b.city])
+    .whereRaw(reqCity.clause, reqCity.bindings)
     .andWhere('user_id', '!=', userId);
 
   if (donors.length) {
@@ -255,6 +259,10 @@ const requestDetail = asyncHandler(async (req, res) => {
 const cancelRequest = asyncHandler(async (req, res) => {
   const request = await db('blood_requests').where({ id: req.params.id, requester_id: req.user.id }).first();
   if (!request) throw ApiError.notFound('Request not found');
+  // Already-closed requests can't be cancelled again (avoids re-notifying donors).
+  if (!ACTIVE_REQUEST_STATUSES.includes(request.status)) {
+    throw ApiError.conflict(`This request is already ${request.status}.`);
+  }
   await db('blood_requests').where({ id: request.id }).update({
     status: BLOOD_REQUEST_STATUS.CANCELLED,
     notes: req.body.reason ? `${request.notes || ''}\nCancelled: ${req.body.reason}` : request.notes,
@@ -273,6 +281,10 @@ const cancelRequest = asyncHandler(async (req, res) => {
 const fulfillRequest = asyncHandler(async (req, res) => {
   const request = await db('blood_requests').where({ id: req.params.id, requester_id: req.user.id }).first();
   if (!request) throw ApiError.notFound('Request not found');
+  // Only an active request can be marked fulfilled (not an already-closed one).
+  if (!ACTIVE_REQUEST_STATUSES.includes(request.status)) {
+    throw ApiError.conflict(`This request is already ${request.status}.`);
+  }
   await db('blood_requests').where({ id: request.id }).update({ status: BLOOD_REQUEST_STATUS.FULFILLED });
   // Reflect on the donor side + thank everyone who was matched.
   await notifyMatchedDonors(request.id, {
@@ -312,13 +324,14 @@ const donorOpenRequests = asyncHandler(async (req, res) => {
   if (!donor) throw ApiError.notFound('You are not registered as a donor');
   if (!donor.blood_group || !donor.city) return ok(res, []);
 
+  const donorCityFeed = cityMatchRaw('r.city', donor.city);
   const rows = await db('blood_requests as r')
     .leftJoin('blood_request_matches as m', function joinMatch() {
       this.on('m.blood_request_id', 'r.id').andOn('m.donor_user_id', '=', db.raw('?', [req.user.id]));
     })
     .where('r.blood_group_required', donor.blood_group)
     .whereIn('r.status', ACTIVE_REQUEST_STATUSES)
-    .whereRaw('LOWER(r.city) = LOWER(?)', [donor.city])
+    .whereRaw(donorCityFeed.clause, donorCityFeed.bindings)
     .andWhere('r.requester_id', '!=', req.user.id)
     .select(
       'r.id as request_id', 'r.patient_name', 'r.blood_group_required', 'r.units_required',
@@ -350,6 +363,21 @@ const respondToRequest = asyncHandler(async (req, res) => {
   if (!donor) throw ApiError.notFound('You are not registered as a donor');
   const request = await db('blood_requests').where({ id: req.params.id }).first();
   if (!request) throw ApiError.notFound('Request not found');
+
+  // A donor may only respond to a request they actually qualify for — the SAME
+  // rules the browse feed (donorOpenRequests) enforces. Without this a donor
+  // could POST any request id and harvest its contact details regardless of
+  // status / blood group / city (privacy leak).
+  if (!ACTIVE_REQUEST_STATUSES.includes(request.status)) {
+    throw ApiError.conflict('This request is no longer open.');
+  }
+  if (request.requester_id === req.user.id) {
+    throw ApiError.badRequest('You cannot respond to your own request.');
+  }
+  const groupMatches = request.blood_group_required === donor.blood_group;
+  if (!groupMatches || !citiesMatch(donor.city, request.city)) {
+    throw ApiError.forbidden('This request does not match your blood group or city.');
+  }
 
   let match = await db('blood_request_matches')
     .where({ blood_request_id: request.id, donor_user_id: req.user.id }).first();

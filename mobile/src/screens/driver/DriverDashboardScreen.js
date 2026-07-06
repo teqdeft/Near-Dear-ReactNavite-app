@@ -132,7 +132,11 @@ export default function DriverDashboardScreen({ navigation }) {
         )}
 
         <Text style={styles.section}>Nearby requests {available.length ? `(${available.length})` : ''}</Text>
-        {available.length === 0 ? (
+        {activeTrips.length > 0 ? (
+          // One ambulance carries one patient at a time — no new requests can be
+          // accepted while a trip is live. Finish the current trip first.
+          <EmptyState icon="ambulance" title="Finish your active trip first" subtitle="You can accept a new request once your current trip is completed or cancelled." />
+        ) : available.length === 0 ? (
           <EmptyState icon="ambulance" title="No requests right now" subtitle="You'll be notified when someone nearby needs an ambulance. Pull to refresh." />
         ) : (
           available.map((r) => (
@@ -144,7 +148,7 @@ export default function DriverDashboardScreen({ navigation }) {
               <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.pickup_address}</Muted></Row>
               <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.drop_address}</Muted></Row>
               {r.city ? <Row style={{ marginTop: 2 }}><Icon name="pin" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.city}</Muted></Row> : null}
-              <AppButton title="Accept request" color={colors.ambulance} loading={busyId === r.id} style={{ marginTop: spacing.md }} onPress={() => accept(r)} />
+              <AppButton title="Accept request" color={colors.ambulance} loading={busyId === r.id} disabled={!!busyId} style={{ marginTop: spacing.md }} onPress={() => accept(r)} />
             </Card>
           ))
         )}

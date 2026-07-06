@@ -104,6 +104,28 @@ const DRIVER_FLOW = [
   AMBULANCE_STATUS.CANCELLED,
 ];
 
+// A driver is "busy" (can't take another trip) in any of these — mirrors the
+// DB lock `uq_amb_one_active_trip_per_driver`. Includes 'assigned' so an
+// admin-assigned trip also blocks a second one.
+const DRIVER_BUSY_STATUSES = [
+  AMBULANCE_STATUS.ASSIGNED,
+  AMBULANCE_STATUS.ACCEPTED,
+  AMBULANCE_STATUS.ON_THE_WAY,
+  AMBULANCE_STATUS.PICKED_UP,
+];
+
+// Terminal states — once a trip reaches one of these it can't change again.
+const TERMINAL_STATUSES = [AMBULANCE_STATUS.COMPLETED, AMBULANCE_STATUS.CANCELLED];
+
+// Forward-only transitions the driver flow allows from each live state.
+const STATUS_TRANSITIONS = {
+  [AMBULANCE_STATUS.ASSIGNED]: [AMBULANCE_STATUS.ACCEPTED, AMBULANCE_STATUS.ON_THE_WAY, AMBULANCE_STATUS.CANCELLED],
+  [AMBULANCE_STATUS.ACCEPTED]: [AMBULANCE_STATUS.ON_THE_WAY, AMBULANCE_STATUS.CANCELLED],
+  [AMBULANCE_STATUS.ON_THE_WAY]: [AMBULANCE_STATUS.PICKED_UP, AMBULANCE_STATUS.CANCELLED],
+  [AMBULANCE_STATUS.PICKED_UP]: [AMBULANCE_STATUS.COMPLETED, AMBULANCE_STATUS.CANCELLED],
+  [AMBULANCE_STATUS.REQUESTED]: [AMBULANCE_STATUS.CANCELLED],
+};
+
 // Find nearby drivers: same-city ambulance drivers first, else all active drivers.
 async function findNearbyDrivers(city) {
   if (city) {
@@ -191,6 +213,10 @@ const cancelRequest = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Request can no longer be cancelled');
   }
   await db('ambulance_requests').where({ id: r.id }).update({ status: AMBULANCE_STATUS.CANCELLED });
+  // Free the assigned ambulance (if any) so the driver can take new requests.
+  if (r.assigned_ambulance_id) {
+    await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
+  }
   return ok(res, null, 'Request cancelled');
 });
 
@@ -223,16 +249,38 @@ const acceptRequest = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Your ambulance must be approved by admin before you can accept rides.');
   }
   const id = req.params.id;
+
+  // A driver can run only ONE trip at a time — an ambulance can carry a single
+  // patient. Block a new accept while any earlier trip is still live.
+  const activeTrip = await db('ambulance_requests')
+    .where({ assigned_driver_id: req.user.id })
+    .whereIn('status', DRIVER_BUSY_STATUSES)
+    .first();
+  if (activeTrip) {
+    throw ApiError.conflict('You already have an active trip. Complete or cancel it before accepting another.');
+  }
+
   const request = await db('ambulance_requests').where({ id }).first();
   if (!request) throw ApiError.notFound('Request not found');
   if (request.assigned_driver_id) throw ApiError.conflict('This request was already accepted by another driver');
   if (request.status !== AMBULANCE_STATUS.REQUESTED) throw ApiError.badRequest('This request can no longer be accepted');
 
-  // Atomic claim: only succeeds if still unassigned.
-  const claimed = await db('ambulance_requests')
-    .where({ id, status: AMBULANCE_STATUS.REQUESTED })
-    .whereNull('assigned_driver_id')
-    .update({ assigned_driver_id: req.user.id, status: AMBULANCE_STATUS.ACCEPTED });
+  // Atomic claim: only succeeds if still unassigned. The unique index
+  // `uq_amb_one_active_trip_per_driver` also makes this airtight against two
+  // simultaneous accepts by the same driver — the second write hits a duplicate
+  // key (ER_DUP_ENTRY) because the driver already has a live trip.
+  let claimed;
+  try {
+    claimed = await db('ambulance_requests')
+      .where({ id, status: AMBULANCE_STATUS.REQUESTED })
+      .whereNull('assigned_driver_id')
+      .update({ assigned_driver_id: req.user.id, status: AMBULANCE_STATUS.ACCEPTED });
+  } catch (e) {
+    if (e && (e.code === 'ER_DUP_ENTRY' || e.errno === 1062)) {
+      throw ApiError.conflict('You already have an active trip. Complete or cancel it before accepting another.');
+    }
+    throw e;
+  }
   if (!claimed) throw ApiError.conflict('This request was just accepted by another driver');
 
   // Link the driver's ambulance (if any) and mark it busy.
@@ -311,7 +359,22 @@ const updateStatus = asyncHandler(async (req, res) => {
   const isDriver = r.assigned_driver_id === req.user.id;
   if (!isDriver && req.user.role !== ROLES.ADMIN) throw ApiError.forbidden('Not assigned to you');
 
+  // Guard the CURRENT state: a completed/cancelled trip is final, and only
+  // forward transitions are allowed (no reviving a cancelled trip to "completed").
+  if (TERMINAL_STATUSES.includes(r.status)) {
+    throw ApiError.conflict(`This trip is already ${r.status} and can no longer change.`);
+  }
+  if (!(STATUS_TRANSITIONS[r.status] || []).includes(status)) {
+    throw ApiError.conflict(`Cannot change a trip from "${r.status}" to "${status}".`);
+  }
+
   await db('ambulance_requests').where({ id: r.id }).update({ status });
+
+  // Free the linked ambulance once the trip ends so it can take new requests.
+  if (TERMINAL_STATUSES.includes(status) && r.assigned_ambulance_id) {
+    await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
+  }
+
   await notify(r.user_id, {
     title: 'Ambulance update',
     message: `Your ambulance request is now: ${status.replace(/_/g, ' ')}.`,

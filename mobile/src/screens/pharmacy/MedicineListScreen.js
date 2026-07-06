@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
@@ -68,7 +68,7 @@ export default function MedicineListScreen({ route, navigation }) {
       prescription_required: !!item.prescription_required,
     });
     if (switched) {
-      // Cart switched pharmacies — quietly informative.
+      Alert.alert('Cart cleared', 'Your cart can only hold items from one pharmacy, so the previous items were removed.');
     }
   };
 

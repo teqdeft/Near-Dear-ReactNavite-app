@@ -16,6 +16,7 @@ router.post('/documents', intoFolder('pharmacy_docs'), upload.single('file'), c.
 const pharmacyRole = requireRole(ROLES.PHARMACY_OWNER, ROLES.PHARMACY_STAFF);
 
 router.get('/dashboard', pharmacyRole, c.dashboard);
+router.get('/sales', pharmacyRole, c.salesSummary);
 router.get('/medicines', pharmacyRole, c.listMyMedicines);
 router.post('/medicines', pharmacyRole, c.addMedicine);
 router.put('/medicines/:id', pharmacyRole, c.updateMedicine);

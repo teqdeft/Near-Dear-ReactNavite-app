@@ -43,6 +43,9 @@ export default function AmbulanceHomeScreen({ navigation }) {
               <Icon name="ambulance" size={18} color={colors.white} />
               <Text style={styles.heroBtnText}>  Book an ambulance</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('EmergencyHelp')} style={{ marginTop: spacing.md, alignItems: 'center' }}>
+              <Text style={styles.heroLink}>No driver nearby? Emergency helplines →</Text>
+            </TouchableOpacity>
           </View>
           <Text style={styles.section}>Your requests</Text>
         </View>
@@ -71,6 +74,7 @@ const styles = StyleSheet.create({
   heroSub: { color: '#DCE8FE', fontSize: font.small, marginTop: 4, marginBottom: spacing.lg },
   heroBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)', height: 48, borderRadius: radius.md },
   heroBtnText: { color: colors.white, fontWeight: font.bold, fontSize: font.body },
+  heroLink: { color: '#DCE8FE', fontSize: font.small, fontWeight: font.semibold, textDecorationLine: 'underline' },
   section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginBottom: spacing.md },
   card: { marginBottom: spacing.md },
   patient: { fontSize: font.body, fontWeight: font.bold, color: colors.text },

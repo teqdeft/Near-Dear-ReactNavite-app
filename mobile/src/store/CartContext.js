@@ -18,11 +18,13 @@ export function CartProvider({ children }) {
   }, []);
 
   const addItem = useCallback((listing) => {
-    let switched = false;
+    // Compute this synchronously from the current pharmacyId — deriving it
+    // inside the setItems updater would return a stale value to the caller
+    // (the updater runs after this function has already returned).
+    const switched = !!pharmacyId && pharmacyId !== listing.pharmacy_id;
     setItems((prev) => {
       // Different pharmacy -> reset cart to the new pharmacy.
-      if (pharmacyId && pharmacyId !== listing.pharmacy_id) {
-        switched = true;
+      if (switched) {
         return [{ ...listing, quantity: 1 }];
       }
       const existing = prev.find((i) => i.pharmacy_medicine_id === listing.pharmacy_medicine_id);

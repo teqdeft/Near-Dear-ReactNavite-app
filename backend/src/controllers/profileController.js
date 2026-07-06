@@ -71,6 +71,8 @@ const requestAccountDeletion = asyncHandler(async (req, res) => {
     message: req.body.reason || 'User requested account & data deletion.',
     status: 'open',
   });
+  // Flag the user so the admin sees the pending deletion request in the dashboard.
+  await db('users').where({ id: req.user.id }).update({ deletion_requested_at: db.fn.now() });
   return created(res, null, 'Account deletion request submitted. Our team will process it.');
 });
 

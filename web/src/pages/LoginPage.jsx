@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
+import { AuthApi } from '../api';
 import { errMessage } from '../api/client';
-import { Input, Button } from '../components/UI';
+import { Input, Button, Modal } from '../components/UI';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgot, setForgot] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -47,6 +49,13 @@ export default function LoginPage() {
           <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           <Button type="submit" className="block" loading={loading}>Sign in</Button>
 
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <button type="button" className="linklike" onClick={() => setForgot(true)}
+              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
+              Forgot password?
+            </button>
+          </div>
+
           <div className="divider" />
           <div style={{ textAlign: 'center' }} className="muted">
             Are you a pharmacy? <Link to="/signup">Register your pharmacy →</Link>
@@ -57,6 +66,71 @@ export default function LoginPage() {
           </div>
         </form>
       </div>
+
+      <Modal open={forgot} onClose={() => setForgot(false)} title="Reset your password" width={420}>
+        <ForgotPassword onClose={() => setForgot(false)} />
+      </Modal>
     </div>
+  );
+}
+
+function ForgotPassword({ onClose }) {
+  const [step, setStep] = useState(1);
+  const [fmobile, setFmobile] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [devCode, setDevCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const requestOtp = async (e) => {
+    e.preventDefault();
+    if (!fmobile.trim()) return setError('Enter your registered mobile number.');
+    setBusy(true); setError('');
+    try {
+      const res = await AuthApi.forgotPasswordRequestOtp(fmobile.trim());
+      setDevCode(res?.data?.devCode || '');
+      setStep(2);
+    } catch (err) { setError(errMessage(err)); }
+    finally { setBusy(false); }
+  };
+
+  const reset = async (e) => {
+    e.preventDefault();
+    if (code.length < 6) return setError('Enter the 6-digit OTP.');
+    if (password.length < 6) return setError('Password must be at least 6 characters.');
+    if (password !== confirm) return setError('Passwords do not match.');
+    setBusy(true); setError('');
+    try {
+      await AuthApi.forgotPasswordReset(fmobile.trim(), code, password);
+      alert('Password reset. Please sign in with your new password.');
+      onClose();
+    } catch (err) { setError(errMessage(err)); }
+    finally { setBusy(false); }
+  };
+
+  if (step === 1) {
+    return (
+      <form onSubmit={requestOtp}>
+        {error && <div className="alert error">{error}</div>}
+        <p className="muted" style={{ marginTop: -6, marginBottom: 12 }}>We’ll send an OTP to your registered mobile number.</p>
+        <Input label="Registered mobile" value={fmobile} onChange={(e) => setFmobile(e.target.value)} placeholder="9999900002" />
+        <Button type="submit" className="block" loading={busy}>Send OTP</Button>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={reset}>
+      {error && <div className="alert error">{error}</div>}
+      <p className="muted" style={{ marginTop: -6, marginBottom: 12 }}>
+        OTP sent to {fmobile}{devCode ? `  (dev code: ${devCode})` : ''}
+      </p>
+      <Input label="OTP code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" />
+      <Input label="New password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+      <Input label="Confirm password" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" />
+      <Button type="submit" className="block" loading={busy}>Reset password</Button>
+    </form>
   );
 }

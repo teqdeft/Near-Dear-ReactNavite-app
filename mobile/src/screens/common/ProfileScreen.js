@@ -73,7 +73,10 @@ export default function ProfileScreen({ navigation }) {
           {!isDriver && <ListRow icon="donor" iconColor={colors.blood} title="Donor profile" onPress={() => navigation.navigate('BecomeDonor')} />}
           {!isDriver && <ListRow icon="prescription" iconColor={colors.pharmacy} title="My prescriptions" onPress={() => navigation.navigate('Prescriptions')} />}
           {!isDriver && <ListRow icon="orders" title="My orders" onPress={() => navigation.navigate('Orders')} />}
-          <ListRow icon="support" iconColor={colors.ambulance} title="Support" onPress={() => navigation.navigate('Support')} last />
+          <ListRow icon="alert" iconColor={colors.danger} title="Emergency Help" onPress={() => navigation.navigate('EmergencyHelp')} />
+          <ListRow icon="support" iconColor={colors.ambulance} title="Support" onPress={() => navigation.navigate('Support')} />
+          <ListRow icon="shield" title="Privacy Policy" onPress={() => navigation.navigate('PrivacyPolicy')} />
+          <ListRow icon="prescription" title="Terms & Conditions" onPress={() => navigation.navigate('Terms')} last />
         </Card>
 
         <Card style={styles.menu}>

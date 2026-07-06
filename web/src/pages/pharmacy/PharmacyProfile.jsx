@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PharmacyApi } from '../../api';
+import { PharmacyApi, AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, TextArea, Button, Badge, Loader } from '../../components/UI';
@@ -59,7 +59,47 @@ export default function PharmacyProfile() {
         <div className="divider" />
         <UploadDoc onUploaded={reload} />
       </div>
+
+      <div className="card">
+        <div className="section-title">Change password</div>
+        <ChangePassword />
+      </div>
     </>
+  );
+}
+
+function ChangePassword() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!currentPassword || !newPassword || !confirmPassword) return setError('Please fill all fields.');
+    if (newPassword.length < 6) return setError('New password must be at least 6 characters.');
+    if (newPassword !== confirmPassword) return setError('New password and confirmation do not match.');
+    setLoading(true);
+    try {
+      await AuthApi.changePassword({ currentPassword, newPassword });
+      setSuccess('Password updated.');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (err) { setError(errMessage(err)); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ maxWidth: 480 }}>
+      {error && <div className="alert error">{error}</div>}
+      {success && <div className="alert success">Password updated.</div>}
+      <Input label="Current password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+      <Input label="New password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+      <Input label="Confirm new password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+      <Button type="submit" loading={loading}>Update password</Button>
+    </form>
   );
 }
 

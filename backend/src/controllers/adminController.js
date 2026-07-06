@@ -49,10 +49,28 @@ const listUsers = asyncHandler(async (req, res) => {
   if (role) q.andWhere('role', role);
   if (search) q.andWhere((b) => b.whereILike('name', `%${search}%`).orWhereILike('mobile', `%${search}%`));
   const offset = (Number(page) - 1) * Number(limit);
-  const rows = await q.clone().select('id', 'name', 'mobile', 'email', 'role', 'status', 'aadhaar_kyc_status', 'created_at')
+  const rows = await q.clone().select('id', 'name', 'mobile', 'email', 'role', 'status', 'aadhaar_kyc_status', 'deletion_requested_at', 'created_at')
     .orderBy('id', 'desc').limit(Number(limit)).offset(offset);
   const total = Number((await q.clone().count('* as c').first()).c);
   return ok(res, { items: rows, total, page: Number(page), limit: Number(limit) });
+});
+
+// DELETE /admin/users/:id  — permanently delete a user and ALL their data
+// (right to erasure). Related rows are removed/nulled by the DB via CASCADE /
+// SET NULL foreign keys, so the user's owned data (profile, addresses, their
+// requests, orders, prescriptions, notifications) is deleted and references from
+// other records are cleared.
+const deleteUser = asyncHandler(async (req, res) => {
+  const user = await db('users').where({ id: req.params.id }).first();
+  if (!user) throw ApiError.notFound('User not found');
+  if (user.role === ROLES.ADMIN) throw ApiError.forbidden('Admin accounts cannot be deleted here');
+
+  await db('users').where({ id: user.id }).del();
+  await logAction(req.user.id, {
+    action: 'user_deleted', entityType: 'user', entityId: user.id,
+    oldValue: { name: user.name, mobile: user.mobile }, newValue: null, ip: ip(req),
+  });
+  return ok(res, { id: user.id }, 'User account and all their data permanently deleted');
 });
 
 const setUserStatus = asyncHandler(async (req, res) => {
@@ -91,6 +109,18 @@ const reviewPharmacy = asyncHandler(async (req, res) => {
   }
   const pharmacy = await db('pharmacies').where({ id: req.params.id }).first();
   if (!pharmacy) throw ApiError.notFound('Pharmacy not found');
+
+  // An approved pharmacy must be SUSPENDED (not re-rejected) to be disabled;
+  // block redundant/invalid re-decisions on an already-settled record.
+  const PHARMACY_TRANSITIONS = {
+    [PHARMACY_APPROVAL.PENDING]: [PHARMACY_APPROVAL.APPROVED, PHARMACY_APPROVAL.REJECTED],
+    [PHARMACY_APPROVAL.APPROVED]: [PHARMACY_APPROVAL.SUSPENDED],
+    [PHARMACY_APPROVAL.SUSPENDED]: [PHARMACY_APPROVAL.APPROVED, PHARMACY_APPROVAL.REJECTED],
+    [PHARMACY_APPROVAL.REJECTED]: [PHARMACY_APPROVAL.APPROVED],
+  };
+  if (!(PHARMACY_TRANSITIONS[pharmacy.approval_status] || []).includes(status)) {
+    throw ApiError.conflict(`Cannot change a ${pharmacy.approval_status} pharmacy to ${status}.`);
+  }
 
   await db('pharmacies').where({ id: pharmacy.id }).update({
     approval_status: status,
@@ -143,6 +173,17 @@ const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
   const vehicle = await db('ambulances').where({ id: req.params.id }).first();
   if (!vehicle) throw ApiError.notFound('Vehicle not found');
 
+  // Block redundant/invalid re-decisions (e.g. approving an already-approved
+  // vehicle again, which would re-fire the notification).
+  const VEHICLE_TRANSITIONS = {
+    [AMBULANCE_APPROVAL.PENDING]: [AMBULANCE_APPROVAL.APPROVED, AMBULANCE_APPROVAL.REJECTED],
+    [AMBULANCE_APPROVAL.APPROVED]: [AMBULANCE_APPROVAL.REJECTED],
+    [AMBULANCE_APPROVAL.REJECTED]: [AMBULANCE_APPROVAL.APPROVED],
+  };
+  if (!(VEHICLE_TRANSITIONS[vehicle.approval_status] || []).includes(status)) {
+    throw ApiError.conflict(`Cannot change a ${vehicle.approval_status} vehicle to ${status}.`);
+  }
+
   await db('ambulances').where({ id: vehicle.id }).update({
     approval_status: status,
     rejection_reason: status === AMBULANCE_APPROVAL.REJECTED ? (reason || 'Rejected') : null,
@@ -194,12 +235,31 @@ const assignAmbulance = asyncHandler(async (req, res) => {
   const { ambulance_id, driver_user_id } = req.body;
   const r = await db('ambulance_requests').where({ id: req.params.id }).first();
   if (!r) throw ApiError.notFound('Request not found');
+  // Can't (re)assign a trip that's already done or cancelled.
+  if ([AMBULANCE_STATUS.COMPLETED, AMBULANCE_STATUS.CANCELLED].includes(r.status)) {
+    throw ApiError.conflict(`This request is already ${r.status} and cannot be assigned.`);
+  }
 
   let driverId = driver_user_id || null;
-  if (ambulance_id && !driverId) {
+  if (ambulance_id) {
     const amb = await db('ambulances').where({ id: ambulance_id }).first();
-    driverId = amb ? amb.driver_user_id : null;
+    if (!amb) throw ApiError.notFound('Ambulance not found');
+    // Don't hand out an ambulance that's already on another trip.
+    if (amb.status === 'busy') throw ApiError.conflict('That ambulance is already busy on another trip.');
+    if (!driverId) driverId = amb.driver_user_id;
   }
+
+  // A driver can run only one trip at a time — reject if they're already busy
+  // on a different request (mirrors the DB lock uq_amb_one_active_trip_per_driver).
+  if (driverId) {
+    const busy = await db('ambulance_requests')
+      .where({ assigned_driver_id: driverId })
+      .whereNot({ id: r.id })
+      .whereIn('status', [AMBULANCE_STATUS.ASSIGNED, AMBULANCE_STATUS.ACCEPTED, AMBULANCE_STATUS.ON_THE_WAY, AMBULANCE_STATUS.PICKED_UP])
+      .first();
+    if (busy) throw ApiError.conflict('That driver already has an active trip.');
+  }
+
   await db('ambulance_requests').where({ id: r.id }).update({
     assigned_ambulance_id: ambulance_id || null,
     assigned_driver_id: driverId,
@@ -324,7 +384,7 @@ const listAuditLogs = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  dashboard, listUsers, setUserStatus,
+  dashboard, listUsers, setUserStatus, deleteUser,
   listPharmacies, pharmacyDetail, reviewPharmacy,
   listAmbulanceVehicles, ambulanceVehicleDetail, reviewAmbulanceVehicle,
   listBloodRequests, setBloodRequestStatus,

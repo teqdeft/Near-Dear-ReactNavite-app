@@ -88,6 +88,13 @@ export default function RegisterScreen({ navigation }) {
           })}
         </View>
 
+        <Text style={styles.consent}>
+          By continuing, you agree to our{' '}
+          <Text style={{ color: accent, fontWeight: font.semibold }} onPress={() => navigation.navigate('Terms')}>Terms</Text>
+          {' '}and{' '}
+          <Text style={{ color: accent, fontWeight: font.semibold }} onPress={() => navigation.navigate('PrivacyPolicy')}>Privacy Policy</Text>.
+        </Text>
+
         <AppButton title={channel === 'email' ? 'Continue — verify email' : 'Continue — verify mobile'} icon="arrow" color={accent} onPress={onContinue} loading={loading} style={{ marginTop: spacing.sm }} />
         <View style={styles.footer}>
           <Text style={styles.muted}>Already have an account? </Text>
@@ -113,4 +120,5 @@ const styles = StyleSheet.create({
   channelBtnActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
   channelText: { fontSize: font.body, fontWeight: font.semibold, color: colors.textMuted },
   channelTextActive: { color: colors.primary },
+  consent: { fontSize: font.tiny, color: colors.textMuted, marginTop: spacing.md, textAlign: 'center', lineHeight: 18 },
 });

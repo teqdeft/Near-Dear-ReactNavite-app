@@ -13,6 +13,11 @@ export async function clearTokens() {
   ]);
 }
 
+// AuthContext registers a handler here so the API layer can force a logout when
+// the session becomes invalid (e.g. the account was deleted by an admin).
+let onSessionExpired = null;
+export function setSessionExpiredHandler(fn) { onSessionExpired = fn; }
+
 const client = axios.create({
   baseURL: API_BASE_URL,
   timeout: 20000,
@@ -25,33 +30,46 @@ client.interceptors.request.use(async (cfg) => {
   return cfg;
 });
 
-let isRefreshing = false;
+// A single in-flight refresh shared by all concurrent 401s. Without this, when
+// several requests 401 at once (e.g. the driver dashboard fires 3 in parallel),
+// only the first would refresh and the rest would be dropped — showing an
+// approved driver the "register vehicle" gate until a manual refresh.
+let refreshPromise = null;
 
-// On 401, try a one-time refresh, then retry the original request.
+async function refreshAccessToken() {
+  const refreshToken = await AsyncStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return null;
+  const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+  const newToken = data?.data?.accessToken;
+  if (newToken) await AsyncStorage.setItem(TOKEN_KEY, newToken);
+  return newToken || null;
+}
+
+// On 401, try a one-time refresh, then retry the original request. Concurrent
+// 401s all await the same refresh and then retry.
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry && !isRefreshing) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
-      isRefreshing = true;
       try {
-        const refreshToken = await AsyncStorage.getItem(REFRESH_KEY);
-        if (refreshToken) {
-          const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-          const newToken = data?.data?.accessToken;
-          if (newToken) {
-            await AsyncStorage.setItem(TOKEN_KEY, newToken);
-            original.headers.Authorization = `Bearer ${newToken}`;
-            isRefreshing = false;
-            return client(original);
-          }
+        // Coalesce concurrent refreshes into one network call.
+        if (!refreshPromise) {
+          refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+        }
+        const newToken = await refreshPromise;
+        if (newToken) {
+          original.headers = original.headers || {};
+          original.headers.Authorization = `Bearer ${newToken}`;
+          return client(original);
         }
       } catch (e) {
         // fall through to logout handling below
       }
-      isRefreshing = false;
       await clearTokens();
+      // Session is truly invalid — tell AuthContext to log the user out.
+      if (onSessionExpired) onSessionExpired(error.response?.data?.message);
     }
     return Promise.reject(error);
   }

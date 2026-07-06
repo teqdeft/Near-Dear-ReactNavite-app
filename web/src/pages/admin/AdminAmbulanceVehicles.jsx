@@ -112,8 +112,15 @@ function Review({ id, onChanged, onClose }) {
 
       <div className="divider" />
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant="success" loading={busy} onClick={() => onDecide('approved')}>Approve</Button>
-        <Button variant="danger" loading={busy} onClick={() => onDecide('rejected')}>Reject</Button>
+        {/* Only show decisions valid from the current state (mirrors backend
+            guard) — no re-approving an approved vehicle or re-rejecting a
+            rejected one. */}
+        {vehicle.approval_status !== 'approved' && (
+          <Button variant="success" loading={busy} onClick={() => onDecide('approved')}>Approve</Button>
+        )}
+        {vehicle.approval_status !== 'rejected' && (
+          <Button variant="danger" loading={busy} onClick={() => onDecide('rejected')}>Reject</Button>
+        )}
         <div style={{ flex: 1 }} />
         <Button variant="ghost" onClick={onClose}>Close</Button>
       </div>

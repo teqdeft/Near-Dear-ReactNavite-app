@@ -106,6 +106,7 @@ const register = asyncHandler(async (req, res) => {
 const loginEmail = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await db('users').where({ email }).first();
+  if (!user) throw ApiError.notFound('No account found with this email');
   if (!user || !user.password_hash) throw ApiError.unauthorized('Invalid email or password');
   if (user.status === USER_STATUS.BLOCKED) throw ApiError.forbidden('Your account is blocked');
   if (user.status === USER_STATUS.DELETED) throw ApiError.unauthorized('Account not found');
@@ -174,6 +175,8 @@ const forgotPasswordRequestOtp = asyncHandler(async (req, res) => {
   const user = await findUserByChannel(channel, destination);
   if (!user) throw ApiError.notFound('No account found with these details');
   if (user.status === USER_STATUS.BLOCKED) throw ApiError.forbidden('Your account is blocked');
+  // Admin passwords are managed manually, not via self-service reset.
+  if (user.role === ROLES.ADMIN) throw ApiError.forbidden('Admin passwords cannot be reset here. Contact the system administrator.');
   const result = await otpService.requestOtp({ channel, destination }, 'reset_password');
   return ok(res, result, 'OTP sent');
 });
@@ -185,6 +188,8 @@ const forgotPasswordReset = asyncHandler(async (req, res) => {
   if (!newPassword || newPassword.length < 6) throw ApiError.badRequest('Password must be at least 6 characters');
   const user = await findUserByChannel(channel, destination);
   if (!user) throw ApiError.notFound('No account found with these details');
+  // Admin passwords are managed manually, not via self-service reset.
+  if (user.role === ROLES.ADMIN) throw ApiError.forbidden('Admin passwords cannot be reset here.');
 
   await otpService.verifyOtp({ channel, destination }, code, 'reset_password');
   const password_hash = await bcrypt.hash(newPassword, 10);
