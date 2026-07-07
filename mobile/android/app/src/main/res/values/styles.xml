@@ -6,4 +6,11 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     </style>
 
+    <!-- Cold-start launch theme: shows the logo splash as the window background
+         until the JS bundle loads and React draws over it. Inherits AppTheme so
+         all normal theming still applies. -->
+    <style name="LaunchTheme" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/launch_screen</item>
+    </style>
+
 </resources>
