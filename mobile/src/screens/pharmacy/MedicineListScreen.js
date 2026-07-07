@@ -16,7 +16,11 @@ export default function MedicineListScreen({ route, navigation }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const { addItem, count } = useCart();
+  const { addItem, count, items: cartItems, setQuantity } = useCart();
+  const cartQty = (id) => {
+    const ci = cartItems.find((c) => c.pharmacy_medicine_id === id);
+    return ci ? ci.quantity : 0;
+  };
 
   useLayoutEffect(() => {
     if (params.title) navigation.setOptions({ title: params.title });
@@ -103,10 +107,26 @@ export default function MedicineListScreen({ route, navigation }) {
                   {item.stock_status !== 'in_stock' ? <Pill label="Out of stock" color={colors.textMuted} style={{ marginLeft: 8 }} /> : null}
                 </Row>
               </View>
-              <TouchableOpacity style={[styles.addBtn, item.stock_status !== 'in_stock' && { opacity: 0.4 }]}
-                disabled={item.stock_status !== 'in_stock'} onPress={() => onAdd(item)}>
-                <Text style={styles.addText}>+ Add</Text>
-              </TouchableOpacity>
+              {item.stock_status !== 'in_stock' ? (
+                <View style={[styles.addBtn, { opacity: 0.4 }]}>
+                  <Text style={styles.addText}>+ Add</Text>
+                </View>
+              ) : cartQty(item.id) > 0 ? (
+                // Already in cart — show an inline quantity stepper (ecommerce style).
+                <View style={styles.stepper}>
+                  <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(item.id, cartQty(item.id) - 1)}>
+                    <Text style={styles.stepText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.qtyText}>{cartQty(item.id)}</Text>
+                  <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(item.id, cartQty(item.id) + 1)}>
+                    <Text style={styles.stepText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.addBtn} onPress={() => onAdd(item)}>
+                  <Text style={styles.addText}>+ Add</Text>
+                </TouchableOpacity>
+              )}
             </Card>
           )}
         />
@@ -131,6 +151,10 @@ const styles = StyleSheet.create({
   price: { fontSize: font.h3, fontWeight: font.bold, color: colors.pharmacy },
   addBtn: { backgroundColor: colors.pharmacyLight, paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: radius.md },
   addText: { color: colors.pharmacy, fontWeight: font.bold },
+  stepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.pharmacyLight, borderRadius: radius.md },
+  stepBtn: { paddingHorizontal: 12, paddingVertical: 8 },
+  stepText: { color: colors.pharmacy, fontWeight: font.bold, fontSize: 18, lineHeight: 20 },
+  qtyText: { minWidth: 22, textAlign: 'center', color: colors.pharmacy, fontWeight: font.bold, fontSize: font.body },
   cartBar: {
     position: 'absolute', left: spacing.lg, right: spacing.lg, bottom: spacing.lg, backgroundColor: colors.pharmacy,
     borderRadius: radius.md, padding: spacing.md, flexDirection: 'row', justifyContent: 'space-between',
