@@ -3,20 +3,24 @@ import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
+import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle, EmptyState } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
+
+const TERMINAL = ['delivered', 'cancelled', 'rejected'];
 
 const STATUS_COLOR = {
   placed: colors.info, accepted: colors.primary, preparing: colors.primary,
   out_for_delivery: colors.warning, delivered: colors.success, rejected: colors.danger, cancelled: colors.danger,
 };
 
-export default function OrderDetailScreen({ route }) {
+export default function OrderDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
+  const { replaceCart } = useCart();
 
   const load = useCallback(async () => {
     setErr(false);
@@ -27,6 +31,36 @@ export default function OrderDetailScreen({ route }) {
   if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
   const { order, items, history } = data;
+
+  // Re-add this order's items to the cart (one tap to reorder the same medicines).
+  // Skips items that are no longer available (removed / out of stock).
+  const reorder = () => {
+    const available = items.filter(
+      (it) => it.pharmacy_medicine_id && it.listing_status === 'active' && it.stock_status === 'in_stock',
+    );
+    const skipped = items.length - available.length;
+    if (available.length === 0) {
+      Alert.alert('Not available', 'None of these medicines are available to order right now.');
+      return;
+    }
+    const cartItems = available.map((it) => ({
+      pharmacy_medicine_id: it.pharmacy_medicine_id,
+      pharmacy_id: order.pharmacy_id,
+      pharmacy_name: order.pharmacy_name,
+      name: it.medicine_name_snapshot,
+      price: it.price_snapshot ?? it.total_price / it.quantity,
+      prescription_required: !!it.prescription_required,
+      quantity: it.quantity,
+    }));
+    replaceCart(cartItems, order.pharmacy_id, order.pharmacy_name);
+    const msg = skipped > 0
+      ? `${available.length} item(s) added to cart. ${skipped} item(s) are unavailable and were skipped.`
+      : 'Items added to your cart.';
+    Alert.alert('Added to cart', msg, [
+      { text: 'Keep browsing' },
+      { text: 'View cart', onPress: () => navigation.navigate('Cart') },
+    ]);
+  };
 
   const cancel = () => {
     Alert.alert('Cancel order?', 'You can only cancel before the pharmacy accepts.', [
@@ -87,6 +121,11 @@ export default function OrderDetailScreen({ route }) {
       {order.order_status === 'placed' && (
         <AppButton title="Cancel order" variant="outline" color={colors.danger} loading={busy}
           style={{ marginTop: spacing.lg }} onPress={cancel} />
+      )}
+
+      {TERMINAL.includes(order.order_status) && (
+        <AppButton title="Order again" icon="cart" color={colors.pharmacy}
+          style={{ marginTop: spacing.lg }} onPress={reorder} />
       )}
     </ScrollView>
   );

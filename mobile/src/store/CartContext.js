@@ -17,6 +17,15 @@ export function CartProvider({ children }) {
     setPharmacyName(null);
   }, []);
 
+  // Replace the whole cart in one shot (used by "Order again"). Doing this via
+  // addItem in a loop is unsafe — the pharmacyId state is stale within the loop,
+  // so a pharmacy switch would wipe earlier items.
+  const replaceCart = useCallback((newItems, pId, pName) => {
+    setItems(newItems.map((i) => ({ ...i, quantity: Math.max(1, i.quantity || 1) })));
+    setPharmacyId(pId);
+    setPharmacyName(pName);
+  }, []);
+
   const addItem = useCallback((listing) => {
     // Compute this synchronously from the current pharmacyId — deriving it
     // inside the setItems updater would return a stale value to the caller
@@ -63,7 +72,7 @@ export function CartProvider({ children }) {
 
   const value = {
     items, pharmacyId, pharmacyName, subtotal, count, needsPrescription,
-    addItem, setQuantity, removeItem, clear,
+    addItem, setQuantity, removeItem, clear, replaceCart,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

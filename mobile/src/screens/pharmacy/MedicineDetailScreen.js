@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { CatalogApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState } from '../../components/UI';
-import { colors, spacing, font } from '../../theme';
+import Icon from '../../components/Icon';
+import { colors, spacing, font, radius } from '../../theme';
 
 export default function MedicineDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const [m, setM] = useState(null);
   const [err, setErr] = useState(false);
-  const { addItem } = useCart();
+  const { addItem, items: cartItems, setQuantity } = useCart();
+  const qty = (cartItems.find((c) => c.pharmacy_medicine_id === id)?.quantity) || 0;
 
   const load = useCallback(() => {
     setErr(false);
@@ -69,8 +71,28 @@ export default function MedicineDetailScreen({ route, navigation }) {
 
       {m.stock_status === 'in_stock' && (
         <View style={{ marginTop: spacing.lg }}>
-          <AppButton title="Add to cart" color={colors.pharmacy} onPress={() => add(false)} />
-          <AppButton title="Buy now" variant="outline" color={colors.pharmacy} style={{ marginTop: spacing.sm }} onPress={() => add(true)} />
+          {qty > 0 ? (
+            <>
+              <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <Text style={styles.inCart}>In cart</Text>
+                <Row style={styles.stepper}>
+                  <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(m.id, qty - 1)}>
+                    <Icon name="minus" size={18} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.qty}>{qty}</Text>
+                  <TouchableOpacity style={styles.stepBtn} onPress={() => setQuantity(m.id, qty + 1)}>
+                    <Icon name="plus" size={18} color={colors.text} />
+                  </TouchableOpacity>
+                </Row>
+              </Row>
+              <AppButton title="Go to cart" color={colors.pharmacy} onPress={() => navigation.navigate('Cart')} />
+            </>
+          ) : (
+            <>
+              <AppButton title="Add to cart" color={colors.pharmacy} onPress={() => add(false)} />
+              <AppButton title="Buy now" variant="outline" color={colors.pharmacy} style={{ marginTop: spacing.sm }} onPress={() => add(true)} />
+            </>
+          )}
         </View>
       )}
     </ScrollView>
@@ -82,4 +104,8 @@ const styles = StyleSheet.create({
   label: { fontSize: font.tiny, color: colors.textMuted, textTransform: 'uppercase', fontWeight: font.semibold, marginBottom: 2 },
   pharmacy: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
   price: { fontSize: font.h2, fontWeight: font.bold, color: colors.pharmacy },
+  inCart: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  stepper: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, overflow: 'hidden' },
+  stepBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  qty: { width: 44, textAlign: 'center', fontSize: font.body, fontWeight: font.bold, color: colors.text, lineHeight: 40 },
 });

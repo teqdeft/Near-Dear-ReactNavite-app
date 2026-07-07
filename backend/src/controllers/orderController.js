@@ -133,7 +133,12 @@ const orderDetail = asyncHandler(async (req, res) => {
     .first();
   if (!order) throw ApiError.notFound('Order not found');
   const [items, history] = await Promise.all([
-    db('medicine_order_items').where({ order_id: order.id }),
+    // Join the current listing so the app can offer "Order again" — it needs
+    // whether the item still exists, is in stock, and if it needs a prescription.
+    db('medicine_order_items as oi')
+      .leftJoin('pharmacy_medicines as pm', 'pm.id', 'oi.pharmacy_medicine_id')
+      .where('oi.order_id', order.id)
+      .select('oi.*', 'pm.prescription_required', 'pm.stock_status', 'pm.status as listing_status'),
     db('order_status_history').where({ order_id: order.id }).orderBy('id', 'asc'),
   ]);
   return ok(res, { order, items, history });
