@@ -2,6 +2,7 @@ const db = require('../db/knex');
 const { ok } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { normalize, bestScore } = require('../utils/search');
 const { PHARMACY_APPROVAL, ACTIVE_STATUS } = require('../constants/enums');
 
 // GET /catalog/categories
@@ -49,21 +50,29 @@ const medicines = asyncHandler(async (req, res) => {
     q.andWhereRaw('COALESCE(pm.category_id, m.category_id) = ?', [category_id]);
   }
   if (city) q.andWhereRaw('LOWER(ph.city) = LOWER(?)', [city]);
-  if (search) {
-    q.andWhere((b) => {
-      b.whereILike('m.name', `%${search}%`)
-        .orWhereILike('m.brand_name', `%${search}%`)
-        .orWhereILike('pm.custom_name', `%${search}%`);
-    });
-  }
 
   // Page through results (?page=) instead of silently truncating at a fixed cap.
   const limit = Math.min(Number(req.query.limit) || 100, 200);
   const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
+  const toDisplay = (r) => ({ ...r, display_name: r.medicine_name || r.custom_name });
+
+  const queryNorm = normalize(search);
+  if (queryNorm) {
+    // Typo-tolerant search: fetch the (bounded) candidate set, then rank in the
+    // app layer so exact/substring hits come first and misspellings still match
+    // via edit distance ("amoxilon" → "amoxicillin"). See utils/search.js.
+    const CANDIDATE_CAP = 1500;
+    const candidates = await q.orderBy('pm.id', 'desc').limit(CANDIDATE_CAP);
+    const ranked = candidates
+      .map((r) => ({ r, score: bestScore(queryNorm, [r.medicine_name, r.brand_name, r.custom_name]) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.r.id - a.r.id);
+    const data = ranked.slice(offset, offset + limit).map((x) => toDisplay(x.r));
+    return ok(res, data);
+  }
+
   const rows = await q.orderBy('pm.id', 'desc').limit(limit).offset(offset);
-  // Normalize a display name.
-  const data = rows.map((r) => ({ ...r, display_name: r.medicine_name || r.custom_name }));
-  return ok(res, data);
+  return ok(res, rows.map(toDisplay));
 });
 
 // GET /catalog/medicines/:id  — a single pharmacy listing

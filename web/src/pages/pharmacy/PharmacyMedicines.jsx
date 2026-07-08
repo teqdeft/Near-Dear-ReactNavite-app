@@ -3,6 +3,7 @@ import { PharmacyApi, CatalogApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, Button, Badge, Loader, Modal, money, ErrorState } from '../../components/UI';
+import Icon from '../../components/Icon';
 
 export default function PharmacyMedicines() {
   const { data, loading, error, reload } = useAsync(() => PharmacyApi.medicines());
@@ -37,16 +38,16 @@ export default function PharmacyMedicines() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="🔍 Search by name or category…"
+          placeholder="Search by name or category…"
           style={{ maxWidth: 260 }}
           disabled={rows.length === 0}
         />
-        <Button onClick={() => setOpen(true)}>＋ Add medicine</Button>
+        <Button onClick={() => setOpen(true)}><Icon name="plus" size={16} /> Add medicine</Button>
       </div>
 
       {lowStockCount > 0 && (
-        <div className="alert" style={{ background: '#FFF4E5', color: '#8A5300', marginBottom: 12 }}>
-          ⚠️ {lowStockCount} medicine(s) low on stock.
+        <div className="alert" style={{ background: '#FFF4E5', color: '#8A5300', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" size={16} style={{ flexShrink: 0 }} /> {lowStockCount} medicine(s) low on stock.
         </div>
       )}
 
@@ -158,7 +159,7 @@ function MedicineRow({ m, categories, onReloadCategories, onChange }) {
         boxShadow: '0 0 0 7px #FCF4F4',
       }}
     >
-      🗑️
+      <Icon name="trash" size={24} />
     </div>
 
     <h3

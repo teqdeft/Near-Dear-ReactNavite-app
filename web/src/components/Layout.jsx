@@ -2,26 +2,27 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import NotificationBell from './NotificationBell';
+import Icon from './Icon';
 
 const NAV = {
   admin: [
-    { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
-    { to: '/admin/pharmacies', label: 'Pharmacy approvals', icon: '🏪' },
-    { to: '/admin/ambulance-vehicles', label: 'Ambulance Vehicles', icon: '🚐' },
-    { to: '/admin/users', label: 'Users', icon: '👥' },
-    { to: '/admin/blood-requests', label: 'Blood requests', icon: '🩸' },
-    { to: '/admin/ambulance', label: 'Ambulance', icon: '🚑' },
-    { to: '/admin/orders', label: 'Medicine orders', icon: '🧾' },
-    { to: '/admin/support', label: 'Support', icon: '💬' },
-    { to: '/admin/notifications', label: 'Notifications', icon: '🔔' },
-    { to: '/admin/audit', label: 'Audit logs', icon: '🛡️' },
+    { to: '/admin', label: 'Dashboard', icon: 'dashboard', end: true },
+    { to: '/admin/pharmacies', label: 'Pharmacy approvals', icon: 'pharmacies' },
+    { to: '/admin/ambulance-vehicles', label: 'Ambulance Vehicles', icon: 'vehicles' },
+    { to: '/admin/users', label: 'Users', icon: 'users' },
+    { to: '/admin/blood-requests', label: 'Blood requests', icon: 'blood' },
+    { to: '/admin/ambulance', label: 'Ambulance', icon: 'ambulance' },
+    { to: '/admin/orders', label: 'Medicine orders', icon: 'orders' },
+    { to: '/admin/support', label: 'Support', icon: 'support' },
+    { to: '/admin/notifications', label: 'Notifications', icon: 'bell' },
+    { to: '/admin/audit', label: 'Audit logs', icon: 'audit' },
   ],
   pharmacy_owner: [
-    { to: '/pharmacy', label: 'Dashboard', icon: '📊', end: true },
-    { to: '/pharmacy/medicines', label: 'Medicines', icon: '💊' },
-    { to: '/pharmacy/orders', label: 'Orders', icon: '🧾' },
-    { to: '/pharmacy/notifications', label: 'Notifications', icon: '🔔' },
-    { to: '/pharmacy/profile', label: 'Profile & documents', icon: '📄' },
+    { to: '/pharmacy', label: 'Dashboard', icon: 'dashboard', end: true },
+    { to: '/pharmacy/medicines', label: 'Medicines', icon: 'medicines' },
+    { to: '/pharmacy/orders', label: 'Orders', icon: 'orders' },
+    { to: '/pharmacy/notifications', label: 'Notifications', icon: 'bell' },
+    { to: '/pharmacy/profile', label: 'Profile & documents', icon: 'documents' },
   ],
 };
 
@@ -50,25 +51,29 @@ export default function Layout() {
     <div className="app-shell">
       <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className="brand">
-          ❤️ NearDear
+          <Icon name="brand" size={22} /> NearDear
           <span className="role-chip">{role === 'admin' ? 'Admin' : 'Pharmacy'}</span>
         </div>
         {items.map((it) => (
           <NavLink key={it.to} to={it.to} end={it.end}
             className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-            <span className="ico">{it.icon}</span> {it.label}
+            <Icon name={it.icon} size={19} className="ico" />{it.label}
           </NavLink>
         ))}
       </aside>
       {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)} />}
       <div className="main">
         <header className="topbar">
-          <button className="nav-toggle" aria-label="Toggle menu" onClick={() => setNavOpen((v) => !v)}>☰</button>
+          <button className="nav-toggle" aria-label="Toggle menu" onClick={() => setNavOpen((v) => !v)}>
+            <Icon name="menu" size={22} />
+          </button>
           <div className="page-title">{title}</div>
           <div className="spacer" />
           <div className="user">
             <NotificationBell base={base} />
-            <span className="user-name">👤 {user?.name || user?.mobile}</span>
+            <span className="user-name" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="user" size={18} /> {user?.name || user?.mobile}
+            </span>
             <button className="btn ghost sm" onClick={logout}>Log out</button>
           </div>
         </header>

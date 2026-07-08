@@ -52,6 +52,7 @@ import CartScreen from '../screens/pharmacy/CartScreen';
 import CheckoutScreen from '../screens/pharmacy/CheckoutScreen';
 import PrescriptionsScreen from '../screens/pharmacy/PrescriptionsScreen';
 import OrderDetailScreen from '../screens/pharmacy/OrderDetailScreen';
+import OrderSuccessScreen from '../screens/pharmacy/OrderSuccessScreen';
 
 // Common
 import SupportScreen from '../screens/common/SupportScreen';
@@ -156,6 +157,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Your Cart' }} />
           <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
           <Stack.Screen name="Prescriptions" component={PrescriptionsScreen} options={{ title: 'Prescriptions' }} />
+          <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Order Detail' }} />
 
           {/* Common */}

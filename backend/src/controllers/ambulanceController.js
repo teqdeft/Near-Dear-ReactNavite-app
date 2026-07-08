@@ -5,6 +5,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
+const { citiesOverlap } = require('../utils/cityMatch');
 const {
   AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES,
   AMBULANCE_APPROVAL, AMBULANCE_DOC_TYPE, DOC_STATUS, AMBULANCE_TYPE,
@@ -126,22 +127,23 @@ const STATUS_TRANSITIONS = {
   [AMBULANCE_STATUS.REQUESTED]: [AMBULANCE_STATUS.CANCELLED],
 };
 
-// Find nearby drivers: same-city ambulance drivers first, else all active drivers.
+// Find matching drivers: drivers whose profile city shares any city with the
+// request (token overlap — "Mohali Chandigarh" matches "Kharar Mohali"). Strict
+// by design: if nothing matches, no driver is notified (the request still
+// reaches admins, who can assign it manually).
 async function findNearbyDrivers(city) {
-  if (city) {
-    const inCity = await db('users as u')
-      .join('user_profiles as p', 'p.user_id', 'u.id')
-      .where('u.role', ROLES.AMBULANCE_DRIVER)
-      .andWhere('u.status', 'active')
-      .andWhereRaw('LOWER(p.city) = LOWER(?)', [city])
-      .select('u.id');
-    if (inCity.length) return inCity;
-  }
-  return db('users').where({ role: ROLES.AMBULANCE_DRIVER, status: 'active' }).select('id');
+  if (!city) return [];
+  const drivers = await db('users as u')
+    .join('user_profiles as p', 'p.user_id', 'u.id')
+    .where('u.role', ROLES.AMBULANCE_DRIVER)
+    .andWhere('u.status', 'active')
+    .select('u.id', 'p.city');
+  return drivers.filter((d) => citiesOverlap(city, d.city)).map((d) => ({ id: d.id }));
 }
 
 // POST /ambulance/requests
 const createRequest = asyncHandler(async (req, res) => {
+  requireKyc(req, 'book an ambulance');
   const b = req.body;
   const [id] = await db('ambulance_requests').insert({
     user_id: req.user.id,
@@ -228,17 +230,19 @@ const driverRequests = asyncHandler(async (req, res) => {
   return ok(res, rows);
 });
 
-// GET /ambulance/driver/available  — open requests a driver can accept (same city first)
+// GET /ambulance/driver/available  — open requests a driver can accept. Only
+// requests whose city shares a token with the driver's profile city are shown
+// (token overlap, so a multi-city driver matches multi-city requests). Strict:
+// a driver with no profile city, or with no city match, sees nothing.
 const driverAvailable = asyncHandler(async (req, res) => {
   const profile = await db('user_profiles').where({ user_id: req.user.id }).first();
   const city = profile?.city;
-  const base = db('ambulance_requests')
+  if (!city) return ok(res, []);
+  const all = await db('ambulance_requests')
     .where({ status: AMBULANCE_STATUS.REQUESTED })
-    .whereNull('assigned_driver_id');
-  let rows = city ? await base.clone().andWhereRaw('LOWER(city) = LOWER(?)', [city]).orderBy('id', 'desc') : [];
-  // If none in the driver's city (or city unknown), show all open requests.
-  if (!rows.length) rows = await base.clone().orderBy('id', 'desc');
-  return ok(res, rows);
+    .whereNull('assigned_driver_id')
+    .orderBy('id', 'desc');
+  return ok(res, all.filter((r) => citiesOverlap(r.city, city)));
 });
 
 // POST /ambulance/requests/:id/accept  — first driver to accept takes the trip

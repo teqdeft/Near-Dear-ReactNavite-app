@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../store/AuthContext';
 import Icon from '../components/Icon';
+import ProfileAvatar from '../components/ProfileAvatar';
 import GradientBackground from '../components/GradientBackground';
 import { colors, spacing, font, radius, shadow } from '../theme';
 
@@ -27,7 +28,7 @@ const QUICK = [
 ];
 
 export default function HomeScreen({ navigation }) {
-  const { user, aadhaarVerified } = useAuth();
+  const { user, profile, aadhaarVerified } = useAuth();
   const firstName = (user?.name || 'there').split(' ')[0];
 
   return (
@@ -52,10 +53,17 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Greeting */}
-          <Text style={styles.welcome}>WELCOME BACK</Text>
-          <Text style={styles.hello}>Hello,</Text>
-          <Text style={styles.name}>{firstName}.</Text>
+          {/* Greeting + profile avatar (tap to open Profile) */}
+          <View style={styles.greetRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.welcome}>WELCOME BACK</Text>
+              <Text style={styles.hello}>Hello,</Text>
+              <Text style={styles.name}>{firstName}.</Text>
+            </View>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Profile')} style={[styles.avatarWrap, shadow.card]}>
+              <ProfileAvatar path={profile?.profile_image} name={user?.name} size={94} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.tagline}>Your health, one tap away. What do you need help with today?</Text>
 
           {/* Emergency card */}
@@ -131,6 +139,8 @@ const styles = StyleSheet.create({
   unverifiedText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
   bell: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
 
+  greetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  avatarWrap: { borderRadius: 49, padding: 2, backgroundColor: colors.white, marginLeft: spacing.md },
   welcome: { color: colors.textMuted, fontSize: font.tiny, fontWeight: font.bold, letterSpacing: 1.5 },
   hello: { fontSize: 40, fontWeight: font.bold, color: colors.text, marginTop: 6, lineHeight: 44 },
   name: { fontSize: 40, fontWeight: font.bold, color: colors.primary, lineHeight: 44 },

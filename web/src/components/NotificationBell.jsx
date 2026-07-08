@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { NotificationApi } from '../api';
+import Icon from './Icon';
 
 // Topbar bell with a live unread badge. Polls every 60s and refreshes on
 // navigation (so the count drops right after the user reads on the list page).
@@ -25,7 +26,7 @@ export default function NotificationBell({ base }) {
   return (
     <button className="btn ghost sm" title="Notifications" style={{ position: 'relative' }}
       onClick={() => navigate(`${base}/notifications`)}>
-      🔔
+      <Icon name="bell" size={19} />
       {unread > 0 && (
         <span style={{
           position: 'absolute', top: -5, right: -5, background: '#D64545', color: '#fff',

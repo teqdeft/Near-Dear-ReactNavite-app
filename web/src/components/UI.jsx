@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Icon from './Icon';
 
 export function Field({ label, children }) {
   return (
@@ -68,10 +69,12 @@ export function Loader({ text = 'Loading…' }) {
   return <div className="empty">{text}</div>;
 }
 
-export function Empty({ icon = '📭', title, sub }) {
+export function Empty({ icon, title, sub }) {
   return (
     <div className="empty">
-      <div style={{ fontSize: 40 }}>{icon}</div>
+      <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--muted)' }}>
+        {icon || <Icon name="inbox" size={40} strokeWidth={1.5} />}
+      </div>
       <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>{title}</div>
       {sub && <div style={{ marginTop: 4 }}>{sub}</div>}
     </div>
@@ -83,7 +86,9 @@ export function Empty({ icon = '📭', title, sub }) {
 export function ErrorState({ message = 'Couldn’t load this. Please try again.', onRetry }) {
   return (
     <div className="empty">
-      <div style={{ fontSize: 40 }}>⚠️</div>
+      <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--warning)' }}>
+        <Icon name="warning" size={40} strokeWidth={1.5} />
+      </div>
       <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>Something went wrong</div>
       <div style={{ marginTop: 4 }}>{message}</div>
       {onRetry && <Button variant="outline" style={{ marginTop: 14 }} onClick={onRetry}>Retry</Button>}

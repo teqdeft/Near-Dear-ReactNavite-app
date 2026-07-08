@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useLayoutEffect, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
@@ -62,6 +62,16 @@ export default function MedicineListScreen({ route, navigation }) {
 
   useFocusEffect(useCallback(() => { load(); }, [params.category_id])); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Live search: reload results ~300ms after the user stops typing, so
+  // suggestions appear as they type — no need to press the search key.
+  const debounceRef = useRef(null);
+  const onChangeSearch = (text) => {
+    setSearch(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(text), 300);
+  };
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
   const onAdd = (item) => {
     const switched = addItem({
       pharmacy_medicine_id: item.id,
@@ -82,7 +92,8 @@ export default function MedicineListScreen({ route, navigation }) {
         <View style={styles.searchBar}>
           <Icon name="search" size={20} color={colors.textMuted} />
           <TextInput style={styles.input} placeholder="Search medicines…" placeholderTextColor={colors.textMuted}
-            value={search} onChangeText={setSearch} returnKeyType="search" onSubmitEditing={() => load(search)} />
+            value={search} onChangeText={onChangeSearch} returnKeyType="search" onSubmitEditing={() => load(search)}
+            autoCorrect={false} autoCapitalize="none" />
         </View>
       </View>
 

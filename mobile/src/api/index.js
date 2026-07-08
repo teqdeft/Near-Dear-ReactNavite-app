@@ -21,6 +21,8 @@ export const AuthApi = {
 
 export const ProfileApi = {
   update: (payload) => data(client.put('/profile', payload)),
+  uploadAvatar: (formData) =>
+    data(client.post('/profile/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
   addresses: () => data(client.get('/profile/addresses')),
   addAddress: (payload) => data(client.post('/profile/addresses', payload)),
   deleteAddress: (id) => full(client.delete(`/profile/addresses/${id}`)),

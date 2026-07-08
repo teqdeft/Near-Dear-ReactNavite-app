@@ -5,9 +5,15 @@ import { errMessage } from '../api/client';
 import { useAuth } from '../store/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { Button, Loader, ErrorState } from '../components/UI';
+import Icon from '../components/Icon';
 
+// Icon + accent colour per notification type.
 const TYPE_ICON = {
-  blood: '🩸', medicine_order: '🧾', ambulance: '🚑', admin: '🛡️', support: '💬',
+  blood: { name: 'blood', color: 'var(--blood)' },
+  medicine_order: { name: 'orders', color: 'var(--pharmacy)' },
+  ambulance: { name: 'ambulance', color: 'var(--ambulance)' },
+  admin: { name: 'audit', color: 'var(--primary)' },
+  support: { name: 'support', color: 'var(--info)' },
 };
 
 // Where a notification should take the user when clicked (role-aware).
@@ -79,7 +85,9 @@ export default function NotificationsPage() {
                 cursor: 'pointer',
                 background: n.is_read ? 'transparent' : 'rgba(14,159,142,.06)',
               }}>
-              <div style={{ fontSize: 22, flexShrink: 0 }}>{TYPE_ICON[n.type] || '🔔'}</div>
+              <div style={{ flexShrink: 0, color: (TYPE_ICON[n.type] || {}).color || 'var(--muted)', display: 'flex' }}>
+                <Icon name={(TYPE_ICON[n.type] || {}).name || 'bell'} size={22} />
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: n.is_read ? 500 : 700, color: 'var(--text)' }}>{n.title}</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{n.message}</div>

@@ -4,6 +4,7 @@ import { useAuth } from '../store/AuthContext';
 import { AuthApi } from '../api';
 import { errMessage } from '../api/client';
 import { Input, Button, Modal } from '../components/UI';
+import Icon from '../components/Icon';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -34,10 +35,10 @@ export default function LoginPage() {
         <h1>NearDear</h1>
         <p>Admin & Pharmacy control center for blood donation, ambulance and medicine operations.</p>
         <div className="feat">
-          <div>🏪 Approve pharmacies & review documents</div>
-          <div>💊 Manage medicines, prescriptions & orders</div>
-          <div>🚑 Assign ambulances & track requests</div>
-          <div>🩸 Monitor blood requests & donor matches</div>
+          <div><Icon name="pharmacies" size={18} /> Approve pharmacies & review documents</div>
+          <div><Icon name="medicines" size={18} /> Manage medicines, prescriptions & orders</div>
+          <div><Icon name="ambulance" size={18} /> Assign ambulances & track requests</div>
+          <div><Icon name="blood" size={18} /> Monitor blood requests & donor matches</div>
         </div>
       </div>
       <div className="auth-form-side">

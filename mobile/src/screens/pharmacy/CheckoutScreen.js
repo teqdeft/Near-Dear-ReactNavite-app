@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { ProfileApi, OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
@@ -50,9 +50,11 @@ export default function CheckoutScreen({ navigation }) {
     } catch (e) { Alert.alert('Error', errMessage(e)); }
   };
 
-  const uploadPrescription = async () => {
-    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.7 });
+  const uploadPrescription = async (from) => {
+    const opts = { mediaType: 'photo', quality: 0.7 };
+    const result = from === 'camera' ? await launchCamera(opts) : await launchImageLibrary(opts);
     if (result.didCancel) return;
+    if (result.errorCode) { Alert.alert('Error', result.errorMessage || 'Could not open the camera or gallery.'); return; }
     const asset = result.assets?.[0];
     if (!asset) return;
     setUploading(true);
@@ -70,6 +72,12 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
+  const choosePrescriptionSource = () => Alert.alert('Prescription photo', 'Add a photo from', [
+    { text: 'Camera', onPress: () => uploadPrescription('camera') },
+    { text: 'Gallery', onPress: () => uploadPrescription('gallery') },
+    { text: 'Cancel', style: 'cancel' },
+  ]);
+
   const placeOrder = async () => {
     if (!addressId) return Alert.alert('Address', 'Please select or add a delivery address.');
     if (needsPrescription && !prescriptionId) return Alert.alert('Prescription', 'This order requires a prescription. Please upload or select one.');
@@ -83,7 +91,8 @@ export default function CheckoutScreen({ navigation }) {
         payment_method: payment,
       });
       clear();
-      navigation.replace('OrderDetail', { id: order.id });
+      // Show the full-screen "Order placed" confirmation before the details.
+      navigation.replace('OrderSuccess', { id: order.id });
     } catch (e) {
       Alert.alert('Could not place order', errMessage(e));
     } finally {
@@ -130,7 +139,7 @@ export default function CheckoutScreen({ navigation }) {
             </Card>
           ))}
           <AppButton title={uploading ? 'Uploading…' : 'Upload prescription'} icon="upload" variant="outline" color={colors.pharmacy}
-            loading={uploading} onPress={uploadPrescription} style={{ marginTop: spacing.sm }} />
+            loading={uploading} onPress={choosePrescriptionSource} style={{ marginTop: spacing.sm }} />
         </>
       )}
 

@@ -5,12 +5,12 @@ import { useAsync } from '../../hooks/useAsync';
 import { Input, Button, Badge, Loader, Modal } from '../../components/UI';
 
 export default function AdminAmbulance() {
-  const [tab, setTab] = useState('requests');
+  const [tab, setTab] = useState('fleet');
   return (
     <>
       <div className="tabs">
-        <span className={'tab' + (tab === 'requests' ? ' active' : '')} onClick={() => setTab('requests')}>Requests</span>
-        <span className={'tab' + (tab === 'fleet' ? ' active' : '')} onClick={() => setTab('fleet')}>Fleet & drivers</span>
+       <span className={'tab' + (tab === 'fleet' ? ' active' : '')} onClick={() => setTab('fleet')}>Fleet & drivers</span>
+       <span className={'tab' + (tab === 'requests' ? ' active' : '')} onClick={() => setTab('requests')}>Requests</span>
       </div>
       {tab === 'requests' ? <Requests /> : <Fleet />}
     </>

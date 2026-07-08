@@ -7,6 +7,10 @@ import { PharmacyApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Loader, Badge, ErrorState, money } from '../../components/UI';
+import Icon from '../../components/Icon';
+
+// KPI badge icon — colour is inherited from the tile's `ink` colour.
+const ki = (name) => <Icon name={name} size={22} />;
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const dayLabel = (iso) => DAY_LABELS[new Date(`${iso}T00:00:00`).getDay()];
@@ -56,7 +60,7 @@ export default function PharmacyDashboard() {
     if (error?.response?.status === 404) {
       return (
         <div className="card">
-          <h3>Welcome to your pharmacy panel 👋</h3>
+          <h3>Welcome to your pharmacy panel</h3>
           <p className="muted" style={{ marginTop: 8 }}>
             You haven't registered your pharmacy yet. Head to{' '}
             <Link to="/pharmacy/profile">Profile & documents</Link> to add your details and upload your license.
@@ -82,18 +86,19 @@ export default function PharmacyDashboard() {
       </div>
 
       {sales?.low_stock_count > 0 && (
-        <Link to="/pharmacy/medicines" className="alert" style={{ display: 'block', background: '#FFF4E5', color: '#8A5300', marginBottom: 16, textDecoration: 'none' }}>
-          ⚠️ <b>{sales.low_stock_count}</b> medicine{sales.low_stock_count > 1 ? 's are' : ' is'} low on stock — review your listings →
+        <Link to="/pharmacy/medicines" className="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FFF4E5', color: '#8A5300', marginBottom: 16, textDecoration: 'none' }}>
+          <Icon name="warning" size={18} style={{ flexShrink: 0 }} />
+          <span><b>{sales.low_stock_count}</b> medicine{sales.low_stock_count > 1 ? 's are' : ' is'} low on stock — review your listings →</span>
         </Link>
       )}
 
       {/* Revenue KPIs */}
       {sales && (
         <div className="grid cols-4">
-          <Kpi label="Total revenue" value={money(sales.total_revenue)} icon="💰" tint="#E6F7F4" ink={PRIMARY} to="/pharmacy/orders?status=delivered" />
-          <Kpi label="Today's revenue" value={money(sales.today_revenue)} icon="📈" tint="#E7F6EC" ink={PHARMA} to="/pharmacy/orders?status=delivered" />
-          <Kpi label="Delivered orders" value={sales.orders.delivered} icon="📦" tint="#EAF1FE" ink="#2B6CB0" to="/pharmacy/orders?status=delivered" />
-          <Kpi label="Low stock" value={sales.low_stock_count} icon="⚠️" tint="#FFF4E5" ink="#B7791F" to="/pharmacy/medicines" />
+          <Kpi label="Total revenue" value={money(sales.total_revenue)} icon={ki('revenue')} tint="#E6F7F4" ink={PRIMARY} to="/pharmacy/orders?status=delivered" />
+          <Kpi label="Today's revenue" value={money(sales.today_revenue)} icon={ki('trending')} tint="#E7F6EC" ink={PHARMA} to="/pharmacy/orders?status=delivered" />
+          <Kpi label="Delivered orders" value={sales.orders.delivered} icon={ki('package')} tint="#EAF1FE" ink="#2B6CB0" to="/pharmacy/orders?status=delivered" />
+          <Kpi label="Low stock" value={sales.low_stock_count} icon={ki('warning')} tint="#FFF4E5" ink="#B7791F" to="/pharmacy/medicines" />
         </div>
       )}
 
@@ -143,15 +148,15 @@ export default function PharmacyDashboard() {
       {/* Order status breakdown */}
       <div className="section-title" style={{ marginTop: 20 }}>Orders</div>
       <div className="grid cols-4">
-        <Kpi label="Total orders" value={o.total} icon="🧾" tint="#F1F3F5" ink="#495057" to="/pharmacy/orders" />
-        <Kpi label="New (placed)" value={o.placed} icon="🆕" tint="#EAF1FE" ink="#2B6CB0" to="/pharmacy/orders?status=placed" />
-        <Kpi label="Accepted" value={o.accepted} icon="✅" tint="#E7F6EC" ink={PHARMA} to="/pharmacy/orders?status=accepted" />
-        <Kpi label="Delivered" value={o.delivered} icon="📦" tint="#E6F7F4" ink={PRIMARY} to="/pharmacy/orders?status=delivered" />
+        <Kpi label="Total orders" value={o.total} icon={ki('orders')} tint="#F1F3F5" ink="#495057" to="/pharmacy/orders" />
+        <Kpi label="New (placed)" value={o.placed} icon={ki('new')} tint="#EAF1FE" ink="#2B6CB0" to="/pharmacy/orders?status=placed" />
+        <Kpi label="Accepted" value={o.accepted} icon={ki('accepted')} tint="#E7F6EC" ink={PHARMA} to="/pharmacy/orders?status=accepted" />
+        <Kpi label="Delivered" value={o.delivered} icon={ki('delivered')} tint="#E6F7F4" ink={PRIMARY} to="/pharmacy/orders?status=delivered" />
       </div>
       <div className="grid cols-4" style={{ marginTop: 16 }}>
-        <Kpi label="Preparing" value={o.preparing} icon="👨‍🍳" tint="#FFF4E5" ink="#B7791F" to="/pharmacy/orders?status=preparing" />
-        <Kpi label="Out for delivery" value={o.out_for_delivery} icon="🚚" tint="#FFF4E5" ink="#B7791F" to="/pharmacy/orders?status=out_for_delivery" />
-        <Kpi label="Rejected" value={o.rejected} icon="🚫" tint="#FDECEC" ink="#D64545" to="/pharmacy/orders?status=rejected" />
+        <Kpi label="Preparing" value={o.preparing} icon={ki('preparing')} tint="#FFF4E5" ink="#B7791F" to="/pharmacy/orders?status=preparing" />
+        <Kpi label="Out for delivery" value={o.out_for_delivery} icon={ki('vehicles')} tint="#FFF4E5" ink="#B7791F" to="/pharmacy/orders?status=out_for_delivery" />
+        <Kpi label="Rejected" value={o.rejected} icon={ki('rejected')} tint="#FDECEC" ink="#D64545" to="/pharmacy/orders?status=rejected" />
         <div className="card" style={{ display: 'flex', alignItems: 'center' }}>
           <Link to="/pharmacy/orders" className="btn block">View all orders →</Link>
         </div>

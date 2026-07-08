@@ -4,6 +4,7 @@ import { PharmacyApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, money, ErrorState, ReasonModal } from '../../components/UI';
+import Icon from '../../components/Icon';
 
 const NEXT_ACTIONS = {
   placed: [{ to: 'accepted', label: 'Accept', variant: 'success' }, { to: 'rejected', label: 'Reject', variant: 'danger' }],
@@ -158,7 +159,7 @@ function OrderDetail({ id, onChanged, onClose }) {
 
       <div className="card" style={{ marginTop: 12, background: '#FAFBFC' }}>
         <div className="section-title" style={{ margin: '0 0 6px' }}>Customer & delivery</div>
-        <div><b>{order.customer_name || 'Customer'}</b>{order.customer_mobile ? <span className="muted"> • 📞 {order.customer_mobile}</span> : ''}</div>
+        <div><b>{order.customer_name || 'Customer'}</b>{order.customer_mobile ? <span className="muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}> • <Icon name="phone" size={13} /> {order.customer_mobile}</span> : ''}</div>
         {address ? (
           <div className="muted" style={{ marginTop: 4, lineHeight: 1.5 }}>
             {address.name ? <span>{address.name}<br /></span> : ''}
@@ -186,10 +187,10 @@ function OrderDetail({ id, onChanged, onClose }) {
       {prescription && (
         <div className="card" style={{ marginTop: 12, background: '#FAFBFC' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>📄 {(prescription.patient_name_snapshot || order.customer_name) ? `${prescription.patient_name_snapshot || order.customer_name}'s prescription` : 'Prescription'} <Badge value={prescription.status} /></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="documents" size={15} /> {(prescription.patient_name_snapshot || order.customer_name) ? `${prescription.patient_name_snapshot || order.customer_name}'s prescription` : 'Prescription'} <Badge value={prescription.status} /></span>
             <Button size="sm" variant="outline" onClick={viewPrescription}>View</Button>
           </div>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Rx #{prescription.id}{(prescription.patient_mobile_snapshot || order.customer_mobile) ? ` • 📞 ${prescription.patient_mobile_snapshot || order.customer_mobile}` : ''}</div>
+          <div className="muted" style={{ fontSize: 13, marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 4 }}>Rx #{prescription.id}{(prescription.patient_mobile_snapshot || order.customer_mobile) ? <> • <Icon name="phone" size={12} /> {prescription.patient_mobile_snapshot || order.customer_mobile}</> : ''}</div>
           {rxUrl && <img src={rxUrl} alt="prescription" style={{ width: '100%', marginTop: 12, borderRadius: 8 }} />}
           {['uploaded', 'under_review'].includes(prescription.status) && (
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

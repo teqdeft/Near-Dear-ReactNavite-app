@@ -34,4 +34,35 @@ function cityMatchRaw(column, city) {
   return { clause, bindings: [norm, norm, norm, norm] };
 }
 
-module.exports = { normalizeCity, citiesMatch, cityMatchRaw };
+/**
+ * Token-overlap city matching. A user can list several adjacent cities in one
+ * field ("Mohali Chandigarh Kharar") and so can a driver ("Chandigarh Mohali").
+ * They should match if they share ANY city — regardless of word order — which
+ * plain substring matching (citiesMatch) misses (e.g. "Kharar Mohali" is not a
+ * substring of "Chandigarh Mohali", yet both are in Mohali).
+ */
+
+// Generic/directional words that appear in many city names ("New Delhi", "New
+// York") — matching on these alone would be a false positive, so we drop them.
+const CITY_STOPWORDS = new Set(['new', 'old', 'east', 'west', 'north', 'south', 'nagar', 'city', 'and', 'the']);
+
+// Break a free-text city string into significant, comparable tokens: lowercased,
+// punctuation split out, noise/too-short words removed.
+function cityTokens(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !CITY_STOPWORDS.has(t));
+}
+
+// True when two free-text city strings share at least one significant token.
+function citiesOverlap(a, b) {
+  const ta = cityTokens(a);
+  if (!ta.length) return false;
+  const tb = new Set(cityTokens(b));
+  return ta.some((t) => tb.has(t));
+}
+
+module.exports = { normalizeCity, citiesMatch, cityMatchRaw, cityTokens, citiesOverlap };

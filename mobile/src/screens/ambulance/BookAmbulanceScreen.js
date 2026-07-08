@@ -5,6 +5,7 @@ import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
 import LocationPicker from '../../components/LocationPicker';
+import KycGate from '../../components/KycGate';
 import { colors, spacing } from '../../theme';
 
 const TYPES = [
@@ -15,7 +16,7 @@ const TYPES = [
 ];
 
 export default function BookAmbulanceScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, aadhaarVerified } = useAuth();
   const [form, setForm] = useState({
     patient_name: user?.name || '', contact_mobile: user?.mobile || '',
     pickup_address: '', drop_address: '', city: user?.city || '', ambulance_type: 'any', notes: '',
@@ -23,6 +24,8 @@ export default function BookAmbulanceScreen({ navigation }) {
   });
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  if (!aadhaarVerified) return <KycGate navigation={navigation} action="book an ambulance" />;
 
   const submit = async () => {
     for (const k of ['patient_name', 'contact_mobile', 'pickup_address', 'drop_address', 'city']) {

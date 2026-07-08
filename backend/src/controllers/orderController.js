@@ -9,9 +9,27 @@ const {
   ACTIVE_STATUS, STOCK_STATUS, NOTIFICATION_TYPE,
 } = require('../constants/enums');
 
-function genOrderNumber() {
-  const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
-  return `ND${Date.now().toString().slice(-8)}${rand}`;
+// A, B, C... for Jan, Feb, Mar... (Dec = L). A plain first-letter scheme would
+// clash (Jan/Jun/Jul all start with J), so this maps each month to a unique,
+// unambiguous letter instead.
+const MONTH_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+
+// First 3 alphabetic characters of the city, uppercased (spaces/punctuation
+// stripped). Falls back to 'GEN' for a missing/unusual city, and pads short
+// names so the code is always exactly 3 characters.
+function cityCode(city) {
+  const letters = String(city || '').toUpperCase().replace(/[^A-Z]/g, '');
+  return (letters.slice(0, 3) || 'GEN').padEnd(3, 'X');
+}
+
+// Order number format: [City 3 letters][Day 2 digits][Month letter][secure random].
+// e.g. pharmacy in Mohali, placed on 8 July -> "MOH08G4F91A2C7".
+function genOrderNumber(city) {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = MONTH_LETTERS[now.getMonth()];
+  const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
+  return `${cityCode(city)}${day}${month}${rand}`;
 }
 
 // POST /orders
@@ -73,28 +91,48 @@ const placeOrder = asyncHandler(async (req, res) => {
 
   // Delivery address must belong to the ordering user (else it's an IDOR that
   // leaks another user's address to the pharmacy).
+  let orderCity = null;
   if (delivery_address_id) {
     const addr = await db('user_addresses').where({ id: delivery_address_id, user_id: userId }).first();
     if (!addr) throw ApiError.badRequest('Delivery address not found');
+    orderCity = addr.city;
+  } else {
+    // No delivery address on this order (e.g. pickup) — fall back to the
+    // user's own profile city for the order number.
+    const profile = await db('user_profiles').where({ user_id: userId }).first();
+    orderCity = profile?.city || null;
   }
 
   const total = subtotal + Number(delivery_fee || 0);
-  const orderNumber = genOrderNumber();
 
+  let orderNumber;
   const orderId = await db.transaction(async (trx) => {
-    const [id] = await trx('medicine_orders').insert({
-      order_number: orderNumber,
-      user_id: userId,
-      pharmacy_id,
-      prescription_id: prescription_id || null,
-      delivery_address_id: delivery_address_id || null,
-      subtotal,
-      delivery_fee,
-      total_amount: total,
-      payment_method: payment_method || PAYMENT_METHOD.COD,
-      payment_status: PAYMENT_STATUS.PENDING,
-      order_status: ORDER_STATUS.PLACED,
-    });
+    let id;
+    // Collisions are astronomically unlikely (secure random suffix), but retry
+    // with a fresh number rather than fail the order on the rare duplicate.
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      orderNumber = genOrderNumber(orderCity);
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        [id] = await trx('medicine_orders').insert({
+          order_number: orderNumber,
+          user_id: userId,
+          pharmacy_id,
+          prescription_id: prescription_id || null,
+          delivery_address_id: delivery_address_id || null,
+          subtotal,
+          delivery_fee,
+          total_amount: total,
+          payment_method: payment_method || PAYMENT_METHOD.COD,
+          payment_status: PAYMENT_STATUS.PENDING,
+          order_status: ORDER_STATUS.PLACED,
+        });
+        break;
+      } catch (e) {
+        const isDuplicate = e?.code === 'ER_DUP_ENTRY' || /order_number/i.test(e?.sqlMessage || '');
+        if (!isDuplicate || attempt === 5) throw e;
+      }
+    }
     await trx('medicine_order_items').insert(orderItems.map((oi) => ({ ...oi, order_id: id })));
     await trx('order_status_history').insert({
       order_id: id, status: ORDER_STATUS.PLACED, changed_by_user_id: userId, note: 'Order placed',

@@ -11,12 +11,36 @@ const ROLES = [
   { key: 'ambulance_driver', icon: 'ambulance', color: colors.ambulance, tint: colors.ambulanceLight, title: 'Ambulance Driver', sub: 'Receive nearby ambulance requests and accept trips' },
 ];
 
+// Live, per-field validation — recomputed on every keystroke so an error
+// appears/disappears as the user types, instead of only on submit.
+function validateField(key, form) {
+  switch (key) {
+    case 'name':
+      return form.name.trim() ? '' : 'Please enter your full name.';
+    case 'mobile':
+      return form.mobile.replace(/\D/g, '').length === 10 ? '' : 'Enter a valid 10-digit mobile number.';
+    case 'email':
+      return /^\S+@\S+\.\S+$/.test(form.email.trim()) ? '' : 'Enter a valid email address.';
+    case 'password':
+      return form.password.length >= 6 ? '' : 'Password must be at least 6 characters.';
+    default:
+      return '';
+  }
+}
+
 export default function RegisterScreen({ navigation }) {
-  const [form, setForm] = useState({ name: '', mobile: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ name: '', mobile: '', email: '', password: '' });
   const [role, setRole] = useState('user');
   const [channel, setChannel] = useState('sms'); // 'sms' | 'email' — where to send the OTP
   const [loading, setLoading] = useState(false);
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  // A field only starts showing its error once the user has typed in it — so
+  // the form doesn't open already covered in red.
+  const [touched, setTouched] = useState({});
+  const set = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
+  };
+  const errorFor = (k) => (touched[k] ? validateField(k, form) : '');
 
   // Accent follows the selected role (user = teal, ambulance driver = blue).
   const selectedRole = ROLES.find((r) => r.key === role) || ROLES[0];
@@ -24,13 +48,16 @@ export default function RegisterScreen({ navigation }) {
   const accentTint = selectedRole.tint;
 
   const onContinue = async () => {
+    const fields = ['name', 'mobile', 'email', 'password'];
+    const hasError = fields.some((k) => validateField(k, form));
+    if (hasError) {
+      // Reveal every field's error (in case some were never touched) instead
+      // of silently doing nothing.
+      setTouched({ name: true, mobile: true, email: true, password: true });
+      return;
+    }
     const mobile = form.mobile.replace(/\D/g, '');
     const email = form.email.trim().toLowerCase();
-    if (!form.name.trim()) return Alert.alert('Name', 'Please enter your full name.');
-    if (mobile.length < 10) return Alert.alert('Mobile', 'Enter a valid 10-digit mobile number.');
-    if (!/^\S+@\S+\.\S+$/.test(email)) return Alert.alert('Email', 'Enter a valid email address.');
-    if (form.password.length < 6) return Alert.alert('Password', 'Password must be at least 6 characters.');
-    if (form.password !== form.confirm) return Alert.alert('Password', 'Passwords do not match.');
     setLoading(true);
     try {
       const res = await AuthApi.requestOtp({ mobile, email, channel });
@@ -67,13 +94,10 @@ export default function RegisterScreen({ navigation }) {
         })}
 
         <View style={{ height: spacing.md }} />
-        <TextField label="Full name" leftIcon="user" placeholder="Your name" value={form.name} onChangeText={(v) => set('name', v)} />
-        <TextField label="Mobile number" leftIcon="phone" placeholder="10-digit mobile" keyboardType="number-pad" maxLength={10} value={form.mobile} onChangeText={(v) => set('mobile', v)} />
-        <TextField label="Email" leftIcon="email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => set('email', v)} />
-        <View style={{ flexDirection: 'row' }}>
-          <TextField style={{ flex: 1, marginRight: spacing.sm }} label="Password" leftIcon="lock" placeholder="••••••" secureTextEntry value={form.password} onChangeText={(v) => set('password', v)} />
-          <TextField style={{ flex: 1 }} label="Confirm" leftIcon="lock" placeholder="••••••" secureTextEntry value={form.confirm} onChangeText={(v) => set('confirm', v)} />
-        </View>
+        <TextField label="Full name" leftIcon="user" placeholder="Your name" value={form.name} onChangeText={(v) => set('name', v)} error={errorFor('name')} />
+        <TextField label="Mobile number" leftIcon="phone" placeholder="10-digit mobile" keyboardType="number-pad" maxLength={10} value={form.mobile} onChangeText={(v) => set('mobile', v)} error={errorFor('mobile')} />
+        <TextField label="Email" leftIcon="email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => set('email', v)} error={errorFor('email')} />
+        <TextField label="Password" leftIcon="lock" placeholder="••••••" secureTextEntry value={form.password} onChangeText={(v) => set('password', v)} error={errorFor('password')} />
 
         <Text style={styles.otpLabel}>Where should we send your OTP?</Text>
         <View style={styles.channelRow}>

@@ -5,8 +5,12 @@ import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
 
-// How often the tab-bar badge re-checks for new unread notifications.
-const POLL_MS = 45000;
+// How often the tab-bar badge re-checks for new unread notifications while the
+// app is in the foreground. There's no push/WebSocket infra yet, so this is a
+// polling approximation of "real-time" — short enough that a new notification
+// shows up on the badge within a few seconds without the user opening the
+// notifications panel.
+const POLL_MS = 10000;
 
 // Keeps a single app-wide unread notification count so the "Alerts" tab can show
 // a badge without every screen fetching it. Polls while logged in and refreshes
@@ -27,10 +31,25 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     if (!isLoggedIn) { setUnread(0); return undefined; }
-    refresh();
-    const timer = setInterval(refresh, POLL_MS);
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') refresh(); });
-    return () => { clearInterval(timer); sub.remove(); };
+
+    let timer = null;
+    const startPolling = () => {
+      if (timer) return;
+      refresh();
+      timer = setInterval(refresh, POLL_MS);
+    };
+    const stopPolling = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+
+    // Only poll while the app is actually visible — no point burning battery
+    // and data checking every 10s while it's backgrounded.
+    if (AppState.currentState === 'active') startPolling();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') startPolling(); else stopPolling();
+    });
+
+    return () => { stopPolling(); sub.remove(); };
   }, [isLoggedIn, refresh]);
 
   return (

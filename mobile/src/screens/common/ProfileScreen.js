@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { useAuth } from '../../store/AuthContext';
 import { ProfileApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, TextField, Avatar, ListRow } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, ListRow } from '../../components/UI';
 import Icon from '../../components/Icon';
+import ProfileAvatar from '../../components/ProfileAvatar';
 import { colors, spacing, font, radius } from '../../theme';
 
 export default function ProfileScreen({ navigation }) {
@@ -14,6 +16,7 @@ export default function ProfileScreen({ navigation }) {
   const [name, setName] = useState(user?.name || '');
   const [city, setCity] = useState(profile?.city || '');
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -23,6 +26,31 @@ export default function ProfileScreen({ navigation }) {
       setEditing(false);
     } catch (e) { Alert.alert('Error', errMessage(e)); } finally { setSaving(false); }
   };
+
+  // Pick a profile photo from the camera or gallery, upload it, then refresh so
+  // the new avatar shows here and on the home screen.
+  const uploadPhoto = async (from) => {
+    const opts = { mediaType: 'photo', quality: 0.7, maxWidth: 1000, maxHeight: 1000 };
+    try {
+      const result = from === 'camera' ? await launchCamera(opts) : await launchImageLibrary(opts);
+      if (result.didCancel) return;
+      if (result.errorCode) { Alert.alert('Error', result.errorMessage || 'Could not open the camera or gallery.'); return; }
+      const asset = result.assets && result.assets[0];
+      if (!asset || !asset.uri) return;
+      setUploadingPhoto(true);
+      const form = new FormData();
+      form.append('file', { uri: asset.uri, name: asset.fileName || 'avatar.jpg', type: asset.type || 'image/jpeg' });
+      await ProfileApi.uploadAvatar(form);
+      await refreshUser();
+    } catch (e) { Alert.alert('Upload failed', errMessage(e)); }
+    finally { setUploadingPhoto(false); }
+  };
+
+  const choosePhoto = () => Alert.alert('Profile photo', 'Add a photo from', [
+    { text: 'Camera', onPress: () => uploadPhoto('camera') },
+    { text: 'Gallery', onPress: () => uploadPhoto('gallery') },
+    { text: 'Cancel', style: 'cancel' },
+  ]);
 
   const confirmLogout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
     { text: 'Cancel', style: 'cancel' }, { text: 'Log out', style: 'destructive', onPress: logout },
@@ -40,7 +68,15 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
-          <Avatar name={user?.name} size={80} color={isDriver ? colors.ambulance : colors.primary} />
+          <TouchableOpacity activeOpacity={0.85} onPress={choosePhoto} disabled={uploadingPhoto}>
+            <ProfileAvatar path={profile?.profile_image} name={user?.name} size={84}
+              color={isDriver ? colors.ambulance : colors.primary} />
+            <View style={[styles.camBadge, { backgroundColor: isDriver ? colors.ambulance : colors.primary }]}>
+              {uploadingPhoto
+                ? <ActivityIndicator size="small" color={colors.white} />
+                : <Icon name="camera" size={15} color={colors.white} />}
+            </View>
+          </TouchableOpacity>
           <Text style={styles.name}>{user?.name || 'NearDear User'}</Text>
           <Row><Icon name="phone" size={14} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>+91 {user?.mobile}</Muted></Row>
           <Row style={{ marginTop: spacing.sm }}>
@@ -92,6 +128,10 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   headerCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
+  camBadge: {
+    position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
+  },
   name: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, marginTop: spacing.md, marginBottom: 4 },
   menu: { paddingVertical: 0, marginBottom: spacing.lg },
 });

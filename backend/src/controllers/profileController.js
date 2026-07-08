@@ -1,8 +1,11 @@
+const path = require('path');
+const fs = require('fs');
 const db = require('../db/knex');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { presentUser } = require('../utils/present');
+const { UPLOAD_ROOT } = require('../middleware/upload');
 
 // PUT /profile  — update name/email + extended profile fields
 const updateProfile = asyncHandler(async (req, res) => {
@@ -31,6 +34,41 @@ const updateProfile = asyncHandler(async (req, res) => {
   const user = await db('users').where({ id: userId }).first();
   const profile = await db('user_profiles').where({ user_id: userId }).first();
   return ok(res, { user: presentUser(user), profile }, 'Profile updated');
+});
+
+// POST /profile/avatar  (multipart: file) — set / replace the user's profile picture
+const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('An image file is required');
+  // The shared upload filter also allows PDFs; a profile picture must be an image.
+  if (!req.file.mimetype || !req.file.mimetype.startsWith('image/')) {
+    fs.unlink(req.file.path, () => {});
+    throw ApiError.badRequest('Profile picture must be an image (JPG, PNG or WEBP).');
+  }
+
+  // Save the file under a human-identifiable name — "<user-name>_<id>_<time>.<ext>"
+  // — so it's clear whose photo it is when browsing the uploads folder. The name
+  // is slugified (only a-z, 0-9, dashes) so it's always a safe filename.
+  const ext = path.extname(req.file.filename).toLowerCase();
+  const slug = String(req.user.name || 'user')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'user';
+  const filename = `${slug}_${req.user.id}_${Date.now()}${ext}`;
+  try {
+    fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), filename));
+  } catch (e) {
+    // If the rename fails for any reason, keep multer's original filename.
+  }
+  const relPath = `profiles/${fs.existsSync(path.join(path.dirname(req.file.path), filename)) ? filename : req.file.filename}`;
+  const existing = await db('user_profiles').where({ user_id: req.user.id }).first();
+  if (existing) {
+    await db('user_profiles').where({ user_id: req.user.id }).update({ profile_image: relPath });
+    // Best-effort: remove the previous image so old avatars don't pile up.
+    if (existing.profile_image) fs.unlink(path.join(UPLOAD_ROOT, existing.profile_image), () => {});
+  } else {
+    await db('user_profiles').insert({ user_id: req.user.id, profile_image: relPath });
+  }
+
+  const profile = await db('user_profiles').where({ user_id: req.user.id }).first();
+  return ok(res, { profile }, 'Profile picture updated');
 });
 
 // GET /profile/addresses
@@ -76,4 +114,4 @@ const requestAccountDeletion = asyncHandler(async (req, res) => {
   return created(res, null, 'Account deletion request submitted. Our team will process it.');
 });
 
-module.exports = { updateProfile, listAddresses, addAddress, deleteAddress, requestAccountDeletion };
+module.exports = { updateProfile, uploadAvatar, listAddresses, addAddress, deleteAddress, requestAccountDeletion };

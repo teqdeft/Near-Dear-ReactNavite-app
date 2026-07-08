@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, ErrorState, Modal } from '../../components/UI';
+import Icon from '../../components/Icon';
 
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
@@ -52,7 +53,7 @@ export default function AdminUsers() {
                 <tr key={u.id}>
                   <td>
                     {u.name || '—'}
-                    {u.deletion_requested_at && <span className="badge red" style={{ marginLeft: 8 }}>🗑 Deletion requested</span>}
+                    {u.deletion_requested_at && <span className="badge red" style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="trash" size={12} /> Deletion requested</span>}
                   </td>
                   <td className="muted">{u.mobile}</td>
                   <td><Badge value={u.role} /></td>
@@ -78,7 +79,7 @@ export default function AdminUsers() {
 
       <Modal open={!!confirming} onClose={() => setConfirming(null)} title="" width={400}>
         <div style={{ width: '100%', textAlign: 'center', padding: '4px 4px 2px' }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FDEAEA', color: '#E03131', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, marginBottom: 16 }}>🗑️</div>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FDEAEA', color: '#E03131', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}><Icon name="trash" size={26} /></div>
           <h3 style={{ fontSize: 19, fontWeight: 700, margin: '0 0 8px' }}>Delete this account?</h3>
           <p className="muted" style={{ margin: '0 0 8px', lineHeight: 1.55 }}>
             <b style={{ color: 'var(--text)' }}>{confirming?.name || confirming?.mobile}</b> and <b style={{ color: 'var(--text)' }}>all their data</b>
