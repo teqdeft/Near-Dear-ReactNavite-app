@@ -12,6 +12,7 @@ import { colors, spacing, font, radius } from '../../theme';
 
 const TYPE_ICON = {
   blood: { icon: 'blood', color: colors.blood },
+  blood_accepted: { icon: 'blood', color: colors.blood },
   medicine_order: { icon: 'pharmacy', color: colors.pharmacy },
   ambulance: { icon: 'ambulance', color: colors.ambulance },
   admin: { icon: 'bell', color: colors.primary },
@@ -33,10 +34,15 @@ function notificationTarget(item, { isDriver, isDonor }) {
   switch (item.type) {
     case 'medicine_order': return id ? { screen: 'OrderDetail', params: { id } } : null;
     case 'ambulance': return id ? { screen: 'AmbulanceDetail', params: { id } } : null;
+    case 'blood_accepted':
+      // Requester-facing: a donor accepted THIS user's request, so always open
+      // their own request detail — even if the user is also a donor.
+      return id ? { screen: 'BloodRequestDetail', params: { id } } : null;
     case 'blood':
-      // Donors act on nearby requests from the "Requests for me" list (accept /
-      // decline). The requester's contact stays hidden there until the donor
-      // accepts. Requesters instead track their own request in its detail page.
+      // Donor-facing (a request near them). Donors act on it from the "Requests
+      // for me" list (accept / decline); the requester's contact stays hidden
+      // there until they accept. A non-donor requester tracks their own request
+      // in its detail page.
       if (isDonor) return { screen: 'DonorRequests' };
       return id ? { screen: 'BloodRequestDetail', params: { id } } : null;
     case 'support': return { screen: 'Support' };

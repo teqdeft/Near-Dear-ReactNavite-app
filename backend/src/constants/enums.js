@@ -119,6 +119,10 @@ const AMBULANCE_STATUS = {
 
 const NOTIFICATION_TYPE = {
   BLOOD: 'blood',
+  // Requester-facing: a donor accepted the user's OWN blood request. Kept
+  // separate from BLOOD (which is donor-facing) so the app can route the
+  // requester to their request detail instead of the "requests for me" list.
+  BLOOD_ACCEPTED: 'blood_accepted',
   MEDICINE_ORDER: 'medicine_order',
   AMBULANCE: 'ambulance',
   ADMIN: 'admin',

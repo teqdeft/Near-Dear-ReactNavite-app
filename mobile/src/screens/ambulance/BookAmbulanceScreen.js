@@ -41,7 +41,7 @@ export default function BookAmbulanceScreen({ navigation }) {
   };
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={[]}>
       <SectionTitle>Patient & contact</SectionTitle>
       <TextField label="Patient name *" value={form.patient_name} onChangeText={(v) => set('patient_name', v)} />
       <TextField label="Contact mobile *" keyboardType="number-pad" maxLength={10} value={form.contact_mobile} onChangeText={(v) => set('contact_mobile', v)} />

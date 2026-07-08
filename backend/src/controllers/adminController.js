@@ -5,6 +5,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { logAction } = require('../services/auditService');
+const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const {
   ROLES, USER_STATUS, PHARMACY_APPROVAL, AMBULANCE_STATUS,
   SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, AMBULANCE_APPROVAL,
@@ -14,6 +15,9 @@ const ip = (req) => req.headers['x-forwarded-for'] || req.socket?.remoteAddress 
 
 // GET /admin/dashboard
 const dashboard = asyncHandler(async (req, res) => {
+  // Retire any blood requests past their 10-day window before counting, so the
+  // "active blood requests" tile never includes long-dead ones.
+  await expireStaleBloodRequests();
   const count = async (table, where = {}) => Number((await db(table).where(where).count('* as c').first()).c);
   // These counts are independent — run them concurrently instead of serially.
   const [
@@ -208,6 +212,7 @@ const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
 
 // ---- Blood requests ---------------------------------------------------
 const listBloodRequests = asyncHandler(async (req, res) => {
+  await expireStaleBloodRequests();
   const q = db('blood_requests');
   if (req.query.status) q.andWhere('status', req.query.status);
   const rows = await q.orderBy('id', 'desc').limit(200);

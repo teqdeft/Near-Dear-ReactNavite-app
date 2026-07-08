@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { FlatList, Text, StyleSheet, Alert, Linking, RefreshControl } from 'react-native';
+import { FlatList, View, Text, StyleSheet, Alert, Linking, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
@@ -57,8 +58,22 @@ export default function DonorRequestsScreen() {
             <Pill label={item.blood_group_required} color={colors.blood} />
             <Muted style={{ marginLeft: 8 }}>{item.units_required} unit(s)</Muted>
           </Row>
-          <Muted style={{ marginTop: 4 }}>{item.hospital_name}, {item.city}</Muted>
-          {item.required_at ? <Muted style={{ marginTop: 2 }}>Needed by: {formatDateTime(item.required_at)}</Muted> : null}
+          {/* Where to go — the donor's most important detail, so it's called
+              out in its own block with the hospital name and full address. */}
+          <View style={styles.locBox}>
+            <Text style={styles.locLabel}>WHERE TO DONATE</Text>
+            <Row style={{ marginTop: 4 }}>
+              <Icon name="hospital" size={17} color={colors.blood} />
+              <Text style={styles.hospital}>{item.hospital_name}</Text>
+            </Row>
+            {(item.hospital_address || item.city) ? (
+              <Row style={{ marginTop: 4, alignItems: 'flex-start' }}>
+                <Icon name="location" size={15} color={colors.textMuted} style={{ marginTop: 2 }} />
+                <Muted style={styles.addr}>{[item.hospital_address, item.city].filter(Boolean).join(', ')}</Muted>
+              </Row>
+            ) : null}
+          </View>
+          {item.required_at ? <Muted style={{ marginTop: spacing.sm }}>Needed by: {formatDateTime(item.required_at)}</Muted> : null}
           {item.created_at ? <Muted style={{ marginTop: 2 }}>Requested: {formatDateTime(item.created_at)}</Muted> : null}
 
           {CLOSED_STATUSES.includes(item.status) ? (
@@ -88,4 +103,11 @@ export default function DonorRequestsScreen() {
 const styles = StyleSheet.create({
   card: { marginBottom: spacing.md },
   patient: { fontSize: font.body, fontWeight: font.bold, color: colors.text },
+  locBox: {
+    marginTop: spacing.md, backgroundColor: colors.bg, borderRadius: 10,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.border,
+  },
+  locLabel: { fontSize: font.tiny, fontWeight: font.bold, color: colors.textMuted, letterSpacing: 0.5 },
+  hospital: { marginLeft: 6, flex: 1, fontSize: font.body, fontWeight: font.bold, color: colors.text },
+  addr: { marginLeft: 6, flex: 1 },
 });

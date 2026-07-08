@@ -3,6 +3,7 @@ const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
+const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesMatch, cityMatchRaw } = require('../utils/cityMatch');
 const {
@@ -81,7 +82,9 @@ async function applyMatchResponse({ match, request, action, userId, res }) {
     await notify(request.requester_id, {
       title: 'A donor accepted your blood request',
       message: `${donorUser.name || 'A donor'} accepted. You can now contact each other.`,
-      type: NOTIFICATION_TYPE.BLOOD,
+      // Requester-facing type so the app opens their request detail, not the
+      // donor "requests for me" list (the requester may also be a donor).
+      type: NOTIFICATION_TYPE.BLOOD_ACCEPTED,
       referenceId: request.id,
     });
     return ok(res, { contact_shared: true, requester_contact: { name: request.contact_person_name, mobile: request.contact_person_mobile } }, 'Accepted. Contact details shared.');
@@ -233,12 +236,14 @@ const createRequest = asyncHandler(async (req, res) => {
 
 // GET /blood/requests/mine
 const myRequests = asyncHandler(async (req, res) => {
+  await expireStaleBloodRequests();
   const rows = await db('blood_requests').where({ requester_id: req.user.id }).orderBy('id', 'desc');
   return ok(res, rows);
 });
 
 // GET /blood/requests/:id  — detail; shares donor contacts only for accepted matches
 const requestDetail = asyncHandler(async (req, res) => {
+  await expireStaleBloodRequests();
   const request = await db('blood_requests').where({ id: req.params.id }).first();
   if (!request) throw ApiError.notFound('Request not found');
   const isOwner = request.requester_id === req.user.id;
@@ -306,6 +311,7 @@ const fulfillRequest = asyncHandler(async (req, res) => {
 
 // GET /blood/donor/requests  — requests this donor was matched to
 const donorIncomingRequests = asyncHandler(async (req, res) => {
+  await expireStaleBloodRequests();
   const rows = await db('blood_request_matches as m')
     .join('blood_requests as r', 'r.id', 'm.blood_request_id')
     .where('m.donor_user_id', req.user.id)
@@ -326,6 +332,7 @@ const donorIncomingRequests = asyncHandler(async (req, res) => {
 // regardless of whether a match row was pre-created, plus this donor's own
 // response state so the UI can show Accept/Decline or "accepted".
 const donorOpenRequests = asyncHandler(async (req, res) => {
+  await expireStaleBloodRequests();
   const donor = await db('donor_profiles').where({ user_id: req.user.id }).first();
   if (!donor) throw ApiError.notFound('You are not registered as a donor');
   if (!donor.blood_group || !donor.city) return ok(res, []);
