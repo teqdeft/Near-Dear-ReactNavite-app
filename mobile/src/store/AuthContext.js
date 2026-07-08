@@ -42,17 +42,21 @@ export function AuthProvider({ children }) {
   // When the API layer detects the session is invalid (e.g. the account was
   // deleted by an admin), force a logout and tell the user.
   useEffect(() => {
-    setSessionExpiredHandler((message) => {
+    setSessionExpiredHandler((message, code) => {
       setUser(null);
       setProfile(null);
       setDonor(null);
-      const deleted = /no longer exists|deleted|not found/i.test(message || '');
-      Alert.alert(
-        deleted ? 'Account deleted' : 'Signed out',
-        deleted
-          ? 'Your account has been deleted. You have been logged out.'
-          : 'Your session has ended. Please log in again.',
-      );
+      // Resetting the user above sends RootNavigator back to the Login screen;
+      // the alert tells the user why they were signed out.
+      const deleted = code === 'ACCOUNT_DELETED' || /no longer exists|deleted|not found/i.test(message || '');
+      const blocked = code === 'ACCOUNT_BLOCKED';
+      if (blocked) {
+        Alert.alert('Account blocked', message || 'Your account has been blocked by the administrator. Please contact support.');
+      } else if (deleted) {
+        Alert.alert('Account deleted', 'Your account has been deleted. You have been logged out.');
+      } else {
+        Alert.alert('Signed out', 'Your session has ended. Please log in again.');
+      }
     });
     return () => setSessionExpiredHandler(null);
   }, []);

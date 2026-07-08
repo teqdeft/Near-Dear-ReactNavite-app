@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -40,9 +41,14 @@ export default function Layout() {
   const title = TITLES[loc.pathname] || 'NearDear';
   const base = role === 'admin' ? '/admin' : '/pharmacy';
 
+  // Mobile navigation drawer. Closed by default; the topbar hamburger opens it,
+  // and any navigation or overlay tap closes it again.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => { setNavOpen(false); }, [loc.pathname]);
+
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className="brand">
           ❤️ NearDear
           <span className="role-chip">{role === 'admin' ? 'Admin' : 'Pharmacy'}</span>
@@ -54,13 +60,15 @@ export default function Layout() {
           </NavLink>
         ))}
       </aside>
+      {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)} />}
       <div className="main">
         <header className="topbar">
+          <button className="nav-toggle" aria-label="Toggle menu" onClick={() => setNavOpen((v) => !v)}>☰</button>
           <div className="page-title">{title}</div>
           <div className="spacer" />
           <div className="user">
             <NotificationBell base={base} />
-            <span>👤 {user?.name || user?.mobile}</span>
+            <span className="user-name">👤 {user?.name || user?.mobile}</span>
             <button className="btn ghost sm" onClick={logout}>Log out</button>
           </div>
         </header>

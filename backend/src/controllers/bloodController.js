@@ -6,7 +6,7 @@ const { notify } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesMatch, cityMatchRaw } = require('../utils/cityMatch');
 const {
-  ROLES, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
+  ROLES, USER_STATUS, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
 } = require('../constants/enums');
 
 // Requests still looking for donors.
@@ -203,7 +203,10 @@ const createRequest = asyncHandler(async (req, res) => {
   const donors = await db('donor_profiles')
     .where({ blood_group: b.blood_group_required, is_available: true, status: DONOR_STATUS.ACTIVE })
     .whereRaw(reqCity.clause, reqCity.bindings)
-    .andWhere('user_id', '!=', userId);
+    .andWhere('user_id', '!=', userId)
+    // Skip donors whose user account is blocked or deleted — a donor profile can
+    // outlive its account, and such users must never be matched or notified.
+    .whereIn('user_id', db('users').where({ status: USER_STATUS.ACTIVE }).select('id'));
 
   if (donors.length) {
     // Batch the match inserts + notifications instead of a serial round-trip
@@ -245,6 +248,9 @@ const requestDetail = asyncHandler(async (req, res) => {
     .join('users as u', 'u.id', 'm.donor_user_id')
     .leftJoin('user_profiles as p', 'p.user_id', 'u.id')
     .where('m.blood_request_id', request.id)
+    // Don't surface donors whose account was since blocked/deleted — they aren't
+    // reachable and shouldn't appear in the requester's matched-donors list.
+    .andWhere('u.status', USER_STATUS.ACTIVE)
     .select(
       'm.id', 'm.response_status', 'm.contact_shared', 'm.responded_at',
       'u.id as donor_user_id', 'u.name as donor_name', 'p.blood_group', 'p.city',

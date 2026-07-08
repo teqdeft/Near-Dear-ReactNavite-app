@@ -51,6 +51,17 @@ client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+
+    // The account itself was terminated by an admin (blocked → 403, deleted →
+    // 401). This is not a stale-token case, so skip the refresh dance and log
+    // the user out straight away with a reason.
+    const code = error.response?.data?.code;
+    if (code === 'ACCOUNT_BLOCKED' || code === 'ACCOUNT_DELETED') {
+      await clearTokens();
+      if (onSessionExpired) onSessionExpired(error.response?.data?.message, code);
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
       try {

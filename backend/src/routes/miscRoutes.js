@@ -7,6 +7,7 @@ router.use(authenticate);
 
 // Notifications
 router.get('/notifications', notifications.list);
+router.get('/notifications/unread-count', notifications.unreadCount);
 router.put('/notifications/read-all', notifications.markAllRead);
 router.put('/notifications/:id/read', notifications.markRead);
 

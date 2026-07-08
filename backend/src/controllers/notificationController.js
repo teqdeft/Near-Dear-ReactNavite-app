@@ -9,6 +9,13 @@ const list = asyncHandler(async (req, res) => {
   return ok(res, { items: rows, unread: Number(unread.c) });
 });
 
+// GET /notifications/unread-count  — lightweight count for the tab-bar badge
+// (avoids fetching the full list just to render the number).
+const unreadCount = asyncHandler(async (req, res) => {
+  const row = await db('notifications').where({ user_id: req.user.id, is_read: false }).count('* as c').first();
+  return ok(res, { unread: Number(row.c) });
+});
+
 // PUT /notifications/:id/read
 const markRead = asyncHandler(async (req, res) => {
   await db('notifications').where({ id: req.params.id, user_id: req.user.id }).update({ is_read: true });
@@ -21,4 +28,4 @@ const markAllRead = asyncHandler(async (req, res) => {
   return ok(res, null, 'All marked read');
 });
 
-module.exports = { list, markRead, markAllRead };
+module.exports = { list, unreadCount, markRead, markAllRead };

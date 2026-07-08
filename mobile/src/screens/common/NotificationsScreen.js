@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NotificationApi } from '../../api';
 import { useAuth } from '../../store/AuthContext';
+import { useNotifications } from '../../store/NotificationContext';
 import { Muted, Row, EmptyState, Loader, IconBadge } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { timeAgo } from '../../utils/datetime';
@@ -46,12 +47,18 @@ function notificationTarget(item, { isDriver, isDonor }) {
 export default function NotificationsScreen({ navigation }) {
   const { isDriver, user, donor } = useAuth();
   const isDonor = !!donor || user?.role === 'donor';
+  const { setUnread } = useNotifications();
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    try { setData(await NotificationApi.list()); } catch (e) { setData({ items: [], unread: 0 }); }
-  }, []);
+    try {
+      const res = await NotificationApi.list();
+      setData(res);
+      // Keep the tab-bar badge in sync with what we just loaded/read here.
+      setUnread(Number(res?.unread || 0));
+    } catch (e) { setData({ items: [], unread: 0 }); }
+  }, [setUnread]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 

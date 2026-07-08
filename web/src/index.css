@@ -35,6 +35,7 @@ h1, h2, h3, h4 { margin: 0; }
 .sidebar {
   width: var(--sidebar); background: linear-gradient(180deg, #10303D 0%, #0C2531 100%); color: #CFE3E0; padding: 22px 14px;
   position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; border-right: 1px solid rgba(255,255,255,.05);
+  z-index: 40; transition: transform .25s ease;
 }
 .sidebar .brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 26px; padding: 0 8px; }
 .sidebar .role-chip { font-size: 11px; background: rgba(255,255,255,.12); padding: 3px 8px; border-radius: 999px; margin-left: auto; font-weight: 600; }
@@ -57,6 +58,14 @@ h1, h2, h3, h4 { margin: 0; }
 .topbar .spacer { flex: 1; }
 .topbar .user { display: flex; align-items: center; gap: 10px; color: var(--muted); }
 .content { padding: 26px; }
+
+/* Hamburger toggle + drawer overlay — only surfaced on narrow screens (see media queries). */
+.nav-toggle {
+  display: none; border: none; background: transparent; cursor: pointer;
+  font-size: 22px; line-height: 1; color: var(--text); padding: 4px 8px; margin-left: -6px; border-radius: 8px;
+}
+.nav-toggle:hover { background: var(--border); }
+.nav-overlay { display: none; }
 
 /* Cards & stats */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
@@ -104,6 +113,9 @@ textarea.input { height: auto; padding: 11px 13px; min-height: 90px; resize: ver
 .row > * { flex: 1; }
 
 /* Tables */
+/* Any card that is purely a table wrapper scrolls horizontally instead of
+   breaking the page layout on narrow screens. */
+.card:has(> .table) { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; padding: 13px 16px; border-bottom: 1px solid var(--border); background: #FAFBFC; }
 .table th:first-child { border-top-left-radius: var(--radius); }
@@ -149,9 +161,41 @@ textarea.input { height: auto; padding: 11px 13px; min-height: 90px; resize: ver
 .tab:hover { border-color: var(--primary); color: var(--primary); }
 .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(14,159,142,.28); }
 
+/* ---- Tablet ---- */
+@media (max-width: 1024px) {
+  .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- Mobile & small tablet: collapse sidebar into a slide-in drawer ---- */
 @media (max-width: 860px) {
   .auth-wrap { grid-template-columns: 1fr; }
   .auth-hero { display: none; }
-  .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
   .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; }
+
+  /* Sidebar becomes an off-canvas drawer toggled by the topbar hamburger. */
+  .sidebar { transform: translateX(-100%); box-shadow: 0 0 40px rgba(0,0,0,.35); }
+  .sidebar.open { transform: translateX(0); }
+  .nav-overlay { display: block; position: fixed; inset: 0; background: rgba(16,24,32,.45); z-index: 35; }
+
+  .main { margin-left: 0; }
+  .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .topbar { padding: 0 14px; gap: 10px; }
+  .topbar .user { gap: 8px; }
+  .content { padding: 16px; }
+  .toolbar { flex-wrap: wrap; }
+}
+
+/* ---- Phones ---- */
+@media (max-width: 560px) {
+  .grid.cols-4 { grid-template-columns: 1fr; }
+  .topbar .page-title { font-size: 16px; }
+  /* Free up the cramped topbar — the drawer already shows who is signed in. */
+  .user-name { display: none; }
+  .content { padding: 12px; }
+  .card { padding: 16px; }
+  .title { font-size: 19px; }
+  .stat .value { font-size: 26px; }
+  /* Let tab pills and filter rows wrap rather than overflow. */
+  .tabs { flex-wrap: wrap; }
 }

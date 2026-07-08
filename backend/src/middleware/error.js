@@ -18,7 +18,7 @@ function errorHandler(err, req, res, next) {
     console.error('[ERROR]', err);
   }
 
-  const body = { success: false, message, errors: err.errors || null };
+  const body = { success: false, message, code: err.code || null, errors: err.errors || null };
   if (config.env !== 'production' && status >= 500) {
     body.stack = err.stack;
   }

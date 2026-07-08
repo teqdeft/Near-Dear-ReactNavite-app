@@ -23,8 +23,8 @@ async function authenticate(req, res, next) {
 
     const user = await db('users').where({ id: decoded.sub }).first();
     if (!user) throw ApiError.unauthorized('User no longer exists');
-    if (user.status === USER_STATUS.BLOCKED) throw ApiError.forbidden('Your account is blocked');
-    if (user.status === USER_STATUS.DELETED) throw ApiError.unauthorized('Account deleted');
+    if (user.status === USER_STATUS.BLOCKED) throw ApiError.forbidden('Your account has been blocked by the administrator.', 'ACCOUNT_BLOCKED');
+    if (user.status === USER_STATUS.DELETED) throw ApiError.unauthorized('Your account has been deleted.', 'ACCOUNT_DELETED');
 
     req.user = user;
     next();

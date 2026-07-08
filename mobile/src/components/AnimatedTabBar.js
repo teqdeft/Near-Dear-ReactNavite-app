@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, UIManager, LayoutAnimation } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
+import { useNotifications } from '../store/NotificationContext';
 import { colors, spacing, font, radius, shadow } from '../theme';
 
 // Enable smooth layout animation on Android (used only for the tab pill).
@@ -20,6 +21,7 @@ const CONFIG = {
 
 export default function AnimatedTabBar({ state, navigation, activeColor = colors.primary }) {
   const insets = useSafeAreaInsets();
+  const { unread } = useNotifications();
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
@@ -27,6 +29,8 @@ export default function AnimatedTabBar({ state, navigation, activeColor = colors
         {state.routes.map((route, index) => {
           const focused = state.index === index;
           const cfg = CONFIG[route.name] || { icon: 'home', label: route.name };
+          // Unread badge on the Alerts (notifications) tab.
+          const badge = route.name === 'Alerts' && unread > 0 ? (unread > 99 ? '99+' : String(unread)) : null;
 
           const onPress = () => {
             // The ONLY animation in the app: the active tab pill expanding with its label.
@@ -40,7 +44,14 @@ export default function AnimatedTabBar({ state, navigation, activeColor = colors
           return (
             <Pressable key={route.key} onPress={onPress}
               style={[styles.item, focused && { backgroundColor: activeColor }]}>
-              <Icon name={cfg.icon} size={22} color={focused ? colors.white : colors.textMuted} />
+              <View>
+                <Icon name={cfg.icon} size={22} color={focused ? colors.white : colors.textMuted} />
+                {badge ? (
+                  <View style={[styles.badge, focused && { borderColor: activeColor }]}>
+                    <Text style={styles.badgeText}>{badge}</Text>
+                  </View>
+                ) : null}
+              </View>
               {focused ? <Text style={styles.label}>{cfg.label}</Text> : null}
             </Pressable>
           );
@@ -61,4 +72,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12, paddingHorizontal: 16, borderRadius: radius.pill,
   },
   label: { color: colors.white, fontWeight: font.bold, fontSize: font.small, marginLeft: 8 },
+  badge: {
+    position: 'absolute', top: -6, right: -10, minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: colors.blood, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4, borderWidth: 2, borderColor: colors.surface,
+  },
+  badgeText: {
+    color: colors.white, fontSize: 10, fontWeight: font.bold,
+    textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false,
+  },
 });

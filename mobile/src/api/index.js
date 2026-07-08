@@ -80,6 +80,7 @@ export const OrderApi = {
 
 export const NotificationApi = {
   list: () => data(client.get('/notifications')),
+  unreadCount: () => data(client.get('/notifications/unread-count')),
   markRead: (id) => full(client.put(`/notifications/${id}/read`)),
   markAllRead: () => full(client.put('/notifications/read-all')),
 };

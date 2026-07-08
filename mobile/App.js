@@ -4,6 +4,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { enableScreens } from 'react-native-screens';
 
 import { AuthProvider } from './src/store/AuthContext';
+import { NotificationProvider } from './src/store/NotificationContext';
 import { CartProvider } from './src/store/CartContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
@@ -29,11 +30,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <CartProvider>
-          <NavigationContainer theme={navTheme}>
-            <RootNavigator />
-          </NavigationContainer>
-        </CartProvider>
+        <NotificationProvider>
+          <CartProvider>
+            <NavigationContainer theme={navTheme}>
+              <RootNavigator />
+            </NavigationContainer>
+          </CartProvider>
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
