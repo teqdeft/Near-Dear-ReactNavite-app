@@ -4,11 +4,11 @@ import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, TextArea, Button, Badge, Loader } from '../../components/UI';
 
+// The two documents a pharmacy must submit for approval. (GST / store photo
+// were removed to keep onboarding simple for now.)
 const DOC_TYPES = [
   { key: 'license', label: 'Drug license' },
   { key: 'owner_id', label: 'Owner ID proof' },
-  { key: 'gst', label: 'GST certificate' },
-  { key: 'store_photo', label: 'Store photo' },
 ];
 
 export default function PharmacyProfile() {
@@ -32,16 +32,33 @@ export default function PharmacyProfile() {
         </div>
         {pharmacy.approval_status === 'pending' && (
           <div className="alert info" style={{ marginTop: 14 }}>
-            Your pharmacy is awaiting admin approval. Upload your documents below to speed things up.
+            Your documents have been submitted and are under review by our team. You’ll be notified once your
+            pharmacy is approved — this usually takes 24–48 hours. Make sure both required documents are uploaded below.
           </div>
         )}
-        {pharmacy.approval_status === 'rejected' && pharmacy.rejection_reason && (
-          <div className="alert error" style={{ marginTop: 14 }}>Rejected: {pharmacy.rejection_reason}. Please re-upload documents.</div>
+        {pharmacy.approval_status === 'approved' && (
+          <div className="alert" style={{ marginTop: 14, background: '#E6F6EA', color: '#1E6B33' }}>
+            Your pharmacy is verified and approved. You can now list medicines and receive orders.
+          </div>
+        )}
+        {pharmacy.approval_status === 'rejected' && (
+          <div className="alert error" style={{ marginTop: 14 }}>
+            {pharmacy.rejection_reason ? `Not approved: ${pharmacy.rejection_reason}. ` : ''}
+            Please review, re-upload the required documents below, and your pharmacy will be sent for approval again.
+          </div>
+        )}
+        {pharmacy.approval_status === 'suspended' && (
+          <div className="alert error" style={{ marginTop: 14 }}>
+            Your pharmacy has been temporarily suspended and is not receiving orders. Please contact support for assistance.
+          </div>
         )}
       </div>
 
       <div className="card">
         <div className="section-title">Documents</div>
+        <div className="muted" style={{ marginBottom: 12, marginTop: -6 }}>
+          Both a <b>Drug license</b> and an <b>Owner ID proof</b> are required for approval.
+        </div>
         <table className="table">
           <thead><tr><th>Type</th><th>Status</th><th>Uploaded</th></tr></thead>
           <tbody>
@@ -57,7 +74,7 @@ export default function PharmacyProfile() {
           </tbody>
         </table>
         <div className="divider" />
-        <UploadDoc onUploaded={reload} />
+        <UploadDoc onUploaded={reload} approved={pharmacy.approval_status === 'approved'} />
       </div>
 
       <div className="card">
@@ -103,7 +120,7 @@ function ChangePassword() {
   );
 }
 
-function UploadDoc({ onUploaded }) {
+function UploadDoc({ onUploaded, approved }) {
   const [type, setType] = useState('license');
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -125,6 +142,11 @@ function UploadDoc({ onUploaded }) {
 
   return (
     <div>
+      <div className="section-title" style={{ fontSize: 15 }}>Upload / replace a document</div>
+      <div className="muted" style={{ marginBottom: 12 }}>
+        Uploading a document <b>replaces</b> the existing one of that type (e.g. a renewed drug license).
+        {approved && ' Since your pharmacy is approved, re-uploading sends it for re-approval — you won’t receive new orders until an admin re-approves.'}
+      </div>
       {error && <div className="alert error">{error}</div>}
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <div className="field" style={{ marginBottom: 0 }}>

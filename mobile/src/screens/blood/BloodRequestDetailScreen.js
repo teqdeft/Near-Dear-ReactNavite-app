@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, Linking, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
@@ -22,6 +22,8 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
@@ -40,7 +42,8 @@ export default function BloodRequestDetailScreen({ route, navigation }) {
   const accepted = matches.filter((m) => m.response_status === 'accepted');
 
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blood} />}>
       <Card style={styles.head}>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text style={styles.title}>{request.patient_name}</Text>

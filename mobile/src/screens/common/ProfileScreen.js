@@ -12,6 +12,7 @@ import { colors, spacing, font, radius } from '../../theme';
 
 export default function ProfileScreen({ navigation }) {
   const { user, profile, aadhaarVerified, isDriver, logout, refreshUser } = useAuth();
+  const aadhaarPending = user?.aadhaar_kyc_status === 'pending';
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [city, setCity] = useState(profile?.city || '');
@@ -82,13 +83,21 @@ export default function ProfileScreen({ navigation }) {
           <Row style={{ marginTop: spacing.sm }}>
             {aadhaarVerified
               ? <Pill label="Aadhaar Verified" color={colors.success} icon="shield" />
-              : <Pill label="Aadhaar not verified" color={colors.warning} icon="alert" />}
+              : aadhaarPending
+                ? <Pill label="Aadhaar under review" color={colors.warning} icon="clock" />
+                : <Pill label="Aadhaar not verified" color={colors.warning} icon="alert" />}
             {profile?.blood_group ? <Pill label={profile.blood_group} color={colors.blood} style={{ marginLeft: 8 }} /> : null}
           </Row>
         </View>
 
         {!aadhaarVerified && (
-          <AppButton title="Verify Aadhaar now" icon="shield" onPress={() => navigation.navigate('AadhaarVerify')} style={{ marginBottom: spacing.lg }} />
+          <AppButton
+            title={aadhaarPending ? 'View verification status' : 'Verify Aadhaar now'}
+            icon={aadhaarPending ? 'clock' : 'shield'}
+            color={isDriver ? colors.ambulance : colors.primary}
+            onPress={() => navigation.navigate('AadhaarUpload')}
+            style={{ marginBottom: spacing.lg }}
+          />
         )}
 
         {editing ? (
@@ -96,8 +105,8 @@ export default function ProfileScreen({ navigation }) {
             <TextField label="Name" leftIcon="user" value={name} onChangeText={setName} />
             <TextField label="City" leftIcon="location" value={city} onChangeText={setCity} />
             <Row>
-              <AppButton title="Save" loading={saving} onPress={save} style={{ flex: 1, marginRight: spacing.sm }} />
-              <AppButton title="Cancel" variant="outline" onPress={() => setEditing(false)} style={{ flex: 1 }} />
+              <AppButton title="Save" color={isDriver ? colors.ambulance : colors.primary} loading={saving} onPress={save} style={{ flex: 1, marginRight: spacing.sm }} />
+              <AppButton title="Cancel" variant="outline" color={isDriver ? colors.ambulance : colors.primary} onPress={() => setEditing(false)} style={{ flex: 1 }} />
             </Row>
           </Card>
         ) : null}

@@ -6,6 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesOverlap } = require('../utils/cityMatch');
+const { renameUpload } = require('../utils/fileNaming');
 const {
   AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES,
   AMBULANCE_APPROVAL, AMBULANCE_DOC_TYPE, DOC_STATUS, AMBULANCE_TYPE,
@@ -70,7 +71,9 @@ const uploadVehicleDocument = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('A document file is required');
   const documentType = Object.values(AMBULANCE_DOC_TYPE).includes(req.body.document_type)
     ? req.body.document_type : AMBULANCE_DOC_TYPE.OTHER;
-  const relPath = `ambulance_docs/${req.file.filename}`;
+  // Save under the driver's name + vehicle number + document type for easy
+  // tracking (e.g. "ramesh-kumar_pb10ab1234_driving-license_<time>.jpg").
+  const relPath = renameUpload(req.file, 'ambulance_docs', [req.user.name, vehicle.vehicle_number, documentType]);
 
   const [id] = await db('ambulance_documents').insert({
     ambulance_id: vehicle.id,
@@ -388,9 +391,53 @@ const updateStatus = asyncHandler(async (req, res) => {
   return ok(res, { status }, 'Status updated');
 });
 
+// POST /ambulance/requests/:id/release  — the assigned driver drops the trip
+// (e.g. accepted by mistake). Instead of cancelling the whole request, it is
+// RE-OPENED so nearby drivers can accept it again — the patient still needs an
+// ambulance. Only allowed before the patient is picked up.
+const RELEASABLE_STATUSES = [AMBULANCE_STATUS.ACCEPTED, AMBULANCE_STATUS.ON_THE_WAY];
+const releaseRequest = asyncHandler(async (req, res) => {
+  const r = await db('ambulance_requests').where({ id: req.params.id }).first();
+  if (!r) throw ApiError.notFound('Request not found');
+  if (r.assigned_driver_id !== req.user.id) throw ApiError.forbidden('This trip is not assigned to you');
+  if (!RELEASABLE_STATUSES.includes(r.status)) {
+    throw ApiError.conflict(`A trip that is "${r.status}" can no longer be released.`);
+  }
+
+  // Free the driver's ambulance and re-open the request to the pool.
+  if (r.assigned_ambulance_id) {
+    await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
+  }
+  await db('ambulance_requests').where({ id: r.id }).update({
+    status: AMBULANCE_STATUS.REQUESTED,
+    assigned_driver_id: null,
+    assigned_ambulance_id: null,
+  });
+
+  // Re-notify other nearby drivers (not the one who just released it).
+  const drivers = await findNearbyDrivers(r.city);
+  await Promise.all([
+    ...drivers.filter((d) => d.id !== req.user.id).map((d) => notify(d.id, {
+      title: 'Ambulance request available again',
+      message: `${r.patient_name} needs a ${r.ambulance_type || 'any'} ambulance${r.city ? ' in ' + r.city : ''}. Tap to accept.`,
+      type: NOTIFICATION_TYPE.AMBULANCE,
+      referenceId: r.id,
+    })),
+    // Reassure the patient that we're finding someone else.
+    notify(r.user_id, {
+      title: 'Finding another ambulance',
+      message: 'The assigned driver couldn’t continue. We’re notifying other nearby drivers for you.',
+      type: NOTIFICATION_TYPE.AMBULANCE,
+      referenceId: r.id,
+    }),
+  ]);
+
+  return ok(res, { status: AMBULANCE_STATUS.REQUESTED }, 'Trip released. Nearby drivers have been notified.');
+});
+
 module.exports = {
   createRequest, myRequests, requestDetail, cancelRequest,
-  driverRequests, driverAvailable, acceptRequest, updateStatus,
+  driverRequests, driverAvailable, acceptRequest, updateStatus, releaseRequest,
   updateLocation, trackRequest,
   registerVehicle, myVehicle, uploadVehicleDocument,
 };

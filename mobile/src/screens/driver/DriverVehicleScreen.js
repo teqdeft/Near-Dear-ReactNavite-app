@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { View, Text, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Pill, Muted, Row, Loader } from '../../components/UI';
+import { statusLabel, APPROVAL_MESSAGE } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
 
 const AMB_TYPES = [
@@ -14,12 +15,10 @@ const AMB_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-// Documents collected at registration (RC + Driving License are mandatory).
+// Documents collected at registration. For now only the Driving License is
+// required — RC / permit / insurance were removed to keep onboarding simple.
 const REG_DOCS = [
-  { value: 'rc', label: 'Vehicle RC', required: true },
   { value: 'driving_license', label: 'Driving License', required: true },
-  { value: 'permit', label: 'Permit', required: false },
-  { value: 'insurance', label: 'Insurance', required: false },
 ];
 
 const DOC_LABEL = {
@@ -28,10 +27,23 @@ const DOC_LABEL = {
 
 const STATUS_COLOR = { approved: colors.success, pending: colors.warning, rejected: colors.danger };
 
-async function pickImage() {
-  const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.7 });
+async function pickImage(from) {
+  const opts = { mediaType: 'photo', quality: 0.7 };
+  const result = from === 'camera' ? await launchCamera(opts) : await launchImageLibrary(opts);
   if (result.didCancel) return null;
+  if (result.errorCode) { Alert.alert('Error', result.errorMessage || 'Could not open the camera or gallery.'); return null; }
   return result.assets?.[0] || null;
+}
+
+// Ask camera vs gallery, then resolve with the picked asset (or null).
+function chooseImageSource() {
+  return new Promise((resolve) => {
+    Alert.alert('Document photo', 'Add a photo from', [
+      { text: 'Camera', onPress: () => pickImage('camera').then(resolve) },
+      { text: 'Gallery', onPress: () => pickImage('gallery').then(resolve) },
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+    ]);
+  });
 }
 
 function assetForm(documentType, asset) {
@@ -58,9 +70,11 @@ export default function DriverVehicleScreen({ navigation }) {
     }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const pickDoc = async (type) => {
-    const asset = await pickImage();
+    const asset = await chooseImageSource();
     if (asset) setDocs((prev) => ({ ...prev, [type]: asset }));
   };
 
@@ -92,7 +106,7 @@ export default function DriverVehicleScreen({ navigation }) {
 
   // Add a single extra document after registration (e.g. after a rejection).
   const uploadOne = async () => {
-    const asset = await pickImage();
+    const asset = await chooseImageSource();
     if (!asset) return;
     setUploading(true);
     try {
@@ -132,7 +146,7 @@ export default function DriverVehicleScreen({ navigation }) {
         </View>
 
         <SectionTitle>Documents</SectionTitle>
-        <Muted style={{ marginBottom: spacing.sm }}>RC and Driving License are required. Upload clear photos.</Muted>
+        <Muted style={{ marginBottom: spacing.sm }}>Driving License is required. Upload a clear photo.</Muted>
         {REG_DOCS.map((d) => (
           <Card key={d.value} style={styles.docPick}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -160,27 +174,25 @@ export default function DriverVehicleScreen({ navigation }) {
   const status = vehicle.approval_status;
 
   return (
-    <Screen scroll>
+    <Screen scroll refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ambulance} />}>
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text style={styles.vehicleNumber}>{vehicle.vehicle_number}</Text>
-          <Pill label={status} color={STATUS_COLOR[status] || colors.textMuted} />
+          <Pill label={statusLabel(status)} color={STATUS_COLOR[status] || colors.textMuted} />
         </Row>
         <Muted style={{ marginTop: 4, textTransform: 'capitalize' }}>{vehicle.ambulance_type} ambulance</Muted>
 
         {status === 'pending' ? (
-          <Muted style={{ marginTop: spacing.sm }}>
-            Your vehicle is awaiting admin approval. You can add more documents below.
-          </Muted>
+          <Text style={[styles.statusLine, { color: colors.warning }]}>{APPROVAL_MESSAGE.pending}</Text>
         ) : null}
-        {status === 'rejected' && vehicle.rejection_reason ? (
+        {status === 'rejected' ? (
           <Text style={[styles.statusLine, { color: colors.danger }]}>
-            Rejected: {vehicle.rejection_reason}. Please add a document to re-submit.
+            {vehicle.rejection_reason ? `Not approved: ${vehicle.rejection_reason}. ` : ''}{APPROVAL_MESSAGE.rejected}
           </Text>
         ) : null}
         {status === 'approved' ? (
           <Text style={[styles.statusLine, { color: colors.success }]}>
-            Approved — you can now accept rides.
+            Verified & approved — you can now accept ambulance rides.
           </Text>
         ) : null}
       </Card>
@@ -193,7 +205,7 @@ export default function DriverVehicleScreen({ navigation }) {
           <Card key={String(doc.id)} style={styles.docCard}>
             <Row style={{ justifyContent: 'space-between' }}>
               <Text style={styles.docLabel}>{DOC_LABEL[doc.document_type] || doc.document_type}</Text>
-              <Pill label={doc.status} color={STATUS_COLOR[doc.status] || colors.textMuted} />
+              <Pill label={statusLabel(doc.status)} color={STATUS_COLOR[doc.status] || colors.textMuted} />
             </Row>
           </Card>
         ))
@@ -201,23 +213,29 @@ export default function DriverVehicleScreen({ navigation }) {
         <Muted style={{ marginBottom: spacing.md }}>No documents uploaded yet.</Muted>
       )}
 
-      <View style={{ height: spacing.sm }} />
+      {/* Once approved the driver is all set — only offer more uploads while
+          the vehicle is still pending or was rejected (needs re-submission). */}
+      {status !== 'approved' && (
+        <>
+          <View style={{ height: spacing.sm }} />
 
-      <SectionTitle>Add another document</SectionTitle>
-      <View style={styles.chips}>
-        {REG_DOCS.concat([{ value: 'vehicle_photo', label: 'Vehicle photo' }]).map((d) => (
-          <Chip key={d.value} label={d.label} active={docType === d.value} color={colors.ambulance} onPress={() => setDocType(d.value)} />
-        ))}
-      </View>
+          <SectionTitle>Add another document</SectionTitle>
+          <View style={styles.chips}>
+            {REG_DOCS.concat([{ value: 'vehicle_photo', label: 'Vehicle photo' }]).map((d) => (
+              <Chip key={d.value} label={d.label} active={docType === d.value} color={colors.ambulance} onPress={() => setDocType(d.value)} />
+            ))}
+          </View>
 
-      <AppButton
-        title={uploading ? 'Uploading…' : 'Upload document'}
-        icon="upload"
-        color={colors.ambulance}
-        loading={uploading}
-        onPress={uploadOne}
-        style={{ marginTop: spacing.md }}
-      />
+          <AppButton
+            title={uploading ? 'Uploading…' : 'Upload document'}
+            icon="upload"
+            color={colors.ambulance}
+            loading={uploading}
+            onPress={uploadOne}
+            style={{ marginTop: spacing.md }}
+          />
+        </>
+      )}
     </Screen>
   );
 }

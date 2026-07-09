@@ -10,6 +10,7 @@ import { useAuth } from '../../store/AuthContext';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font, radius } from '../../theme';
 
 const STATUS_COLOR = { uploaded: colors.info, under_review: colors.warning, approved: colors.success, rejected: colors.danger };
@@ -74,7 +75,7 @@ export default function PrescriptionsScreen() {
         <Card style={styles.card} onPress={() => openView(item)}>
           <Row style={{ justifyContent: 'space-between' }}>
             <Text style={styles.title}>{(item.patient_name_snapshot || user?.name) ? `${item.patient_name_snapshot || user.name}'s Prescription` : 'Prescription'} #{item.id}</Text>
-            <Pill label={item.status.replace('_', ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
+            <Pill label={statusLabel(item.status)} color={STATUS_COLOR[item.status] || colors.textMuted} />
           </Row>
           {(item.patient_mobile_snapshot || user?.mobile) ? <Muted style={{ marginTop: 4 }}>📞 +91 {item.patient_mobile_snapshot || user.mobile}</Muted> : null}
           {item.doctor_name ? <Muted style={{ marginTop: 4 }}>Dr. {item.doctor_name}</Muted> : null}

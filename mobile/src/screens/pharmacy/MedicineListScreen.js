@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useLayoutEffect, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
@@ -16,6 +16,7 @@ export default function MedicineListScreen({ route, navigation }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { addItem, count, items: cartItems, setQuantity } = useCart();
   const cartQty = (id) => {
     const ci = cartItems.find((c) => c.pharmacy_medicine_id === id);
@@ -45,6 +46,19 @@ export default function MedicineListScreen({ route, navigation }) {
       setHasMore(rows.length === PAGE_SIZE);
     } catch (e) { setItems([]); setHasMore(false); }
   }, [fetchPage]);
+
+  // Pull-to-refresh: reload the first page WITHOUT clearing the list to null
+  // (which would hide the list — and the refresh spinner along with it).
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      setPage(1); setHasMore(true);
+      const rows = await fetchPage(1, search);
+      setItems(rows);
+      setHasMore(rows.length === PAGE_SIZE);
+    } catch (e) { /* keep the current list on error */ }
+    finally { setRefreshing(false); }
+  };
 
   // Next page — appends as the user scrolls to the bottom.
   const loadMore = useCallback(async () => {
@@ -102,6 +116,7 @@ export default function MedicineListScreen({ route, navigation }) {
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 90, flexGrow: 1 }}
           data={items}
           keyExtractor={(i) => String(i.id)}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.pharmacy} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.pharmacy} style={{ marginVertical: spacing.lg }} /> : null}

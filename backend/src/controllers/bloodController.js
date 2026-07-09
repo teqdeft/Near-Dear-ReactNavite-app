@@ -71,6 +71,13 @@ async function notifyMatchedDonors(requestId, payload) {
 // request-id response endpoints).
 async function applyMatchResponse({ match, request, action, userId, res }) {
   if (match.response_status !== MATCH_RESPONSE.PENDING) throw ApiError.badRequest('You have already responded');
+  // Guard against responding to a request that's already closed (cancelled /
+  // fulfilled / expired). Without this, a stale client could accept a dead
+  // request via the match endpoint — sharing contact and notifying the
+  // requester about a request that no longer needs blood.
+  if (!request || !ACTIVE_REQUEST_STATUSES.includes(request.status)) {
+    throw ApiError.conflict('This request is no longer open.');
+  }
 
   if (action === 'accept') {
     await db('blood_request_matches').where({ id: match.id }).update({
@@ -126,6 +133,22 @@ const becomeDonor = asyncHandler(async (req, res) => {
 
   if (existing) {
     await db('donor_profiles').where({ user_id: userId }).update(payload);
+
+    // If the donor changed their blood group or city, drop any PENDING matches
+    // that no longer qualify — otherwise old matches linger in their "requests
+    // for me" list. Accepted/declined matches are kept as history; the backfill
+    // below re-adds matches that fit the new profile.
+    if (existing.blood_group !== payload.blood_group || existing.city !== payload.city) {
+      const pending = await db('blood_request_matches as m')
+        .join('blood_requests as r', 'r.id', 'm.blood_request_id')
+        .where('m.donor_user_id', userId)
+        .andWhere('m.response_status', MATCH_RESPONSE.PENDING)
+        .select('m.id', 'r.blood_group_required', 'r.city');
+      const staleIds = pending
+        .filter((m) => m.blood_group_required !== payload.blood_group || !citiesMatch(payload.city, m.city))
+        .map((m) => m.id);
+      if (staleIds.length) await db('blood_request_matches').whereIn('id', staleIds).del();
+    }
   } else {
     await db('donor_profiles').insert({ user_id: userId, ...payload });
   }

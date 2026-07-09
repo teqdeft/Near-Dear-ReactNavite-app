@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import client, { TOKEN_KEY, REFRESH_KEY, clearTokens, setSessionExpiredHandler } from '../api/client';
 import { AuthApi } from '../api';
@@ -107,6 +107,23 @@ export function AuthProvider({ children }) {
       /* ignore */
     }
   }, [loadMe]);
+
+  // While an Aadhaar KYC is awaiting manual admin approval, poll /me so the
+  // "pending" status flips to "verified" on the Home and Profile screens as soon
+  // as an admin approves it — without the user having to reopen the app. The
+  // poll stops automatically once the status leaves "pending".
+  useEffect(() => {
+    if (!isLoggedIn || user?.aadhaar_kyc_status !== 'pending') return undefined;
+    let timer = null;
+    const start = () => { if (!timer) timer = setInterval(refreshUser, 15000); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    if (AppState.currentState === 'active') start();
+    // Refresh immediately when the app comes back to the foreground, then keep polling.
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') { refreshUser(); start(); } else stop();
+    });
+    return () => { stop(); sub.remove(); };
+  }, [isLoggedIn, user?.aadhaar_kyc_status, refreshUser]);
 
   const value = {
     booting,

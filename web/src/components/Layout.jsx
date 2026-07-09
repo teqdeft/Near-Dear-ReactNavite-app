@@ -9,6 +9,7 @@ const NAV = {
     { to: '/admin', label: 'Dashboard', icon: 'dashboard', end: true },
     { to: '/admin/pharmacies', label: 'Pharmacy approvals', icon: 'pharmacies' },
     { to: '/admin/ambulance-vehicles', label: 'Ambulance Vehicles', icon: 'vehicles' },
+    { to: '/admin/aadhaar', label: 'Aadhaar KYC', icon: 'documents' },
     { to: '/admin/users', label: 'Users', icon: 'users' },
     { to: '/admin/blood-requests', label: 'Blood requests', icon: 'blood' },
     { to: '/admin/ambulance', label: 'Ambulance', icon: 'ambulance' },
@@ -27,7 +28,7 @@ const NAV = {
 };
 
 const TITLES = {
-  '/admin': 'Dashboard', '/admin/pharmacies': 'Pharmacy approvals', '/admin/ambulance-vehicles': 'Ambulance Vehicles', '/admin/users': 'Users',
+  '/admin': 'Dashboard', '/admin/pharmacies': 'Pharmacy approvals', '/admin/ambulance-vehicles': 'Ambulance Vehicles', '/admin/aadhaar': 'Aadhaar KYC', '/admin/users': 'Users',
   '/admin/blood-requests': 'Blood requests', '/admin/ambulance': 'Ambulance', '/admin/orders': 'Medicine orders',
   '/admin/support': 'Support', '/admin/audit': 'Audit logs', '/admin/notifications': 'Notifications',
   '/pharmacy': 'Dashboard', '/pharmacy/medicines': 'Medicines', '/pharmacy/orders': 'Orders', '/pharmacy/profile': 'Profile & documents',

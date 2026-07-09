@@ -18,6 +18,9 @@ router.post(
     body('patient_name').trim().notEmpty().withMessage('Patient name is required'),
     body('contact_mobile').trim().isLength({ min: 10, max: 15 }).withMessage('Valid contact mobile is required'),
     body('pickup_address').trim().notEmpty().withMessage('Pickup address is required'),
+    // City is required — driver matching is city-based, so a request without a
+    // city would reach no drivers.
+    body('city').trim().notEmpty().withMessage('City is required'),
     validate,
   ],
   c.createRequest
@@ -30,6 +33,7 @@ router.get('/requests/:id', c.requestDetail);
 router.get('/requests/:id/track', c.trackRequest); // user polls live GPS
 router.post('/requests/:id/cancel', c.cancelRequest);
 router.post('/requests/:id/accept', c.acceptRequest);
+router.post('/requests/:id/release', c.releaseRequest); // driver drops an accepted trip → re-opens it
 router.put('/requests/:id/status', c.updateStatus);
 
 module.exports = router;

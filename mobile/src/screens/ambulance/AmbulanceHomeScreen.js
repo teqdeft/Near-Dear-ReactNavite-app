@@ -6,6 +6,7 @@ import { Card, Pill, Muted, Row, Loader } from '../../components/UI';
 import Icon from '../../components/Icon';
 import GradientBackground from '../../components/GradientBackground';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font, radius, shadow } from '../../theme';
 
 const STATUS_COLOR = {
@@ -55,7 +56,7 @@ export default function AmbulanceHomeScreen({ navigation }) {
         <Card onPress={() => navigation.navigate('AmbulanceDetail', { id: item.id })} style={styles.card}>
           <Row style={{ justifyContent: 'space-between' }}>
             <Text style={styles.patient}>{item.patient_name}</Text>
-            <Pill label={item.status.replace(/_/g, ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
+            <Pill label={statusLabel(item.status)} color={STATUS_COLOR[item.status] || colors.textMuted} />
           </Row>
           <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.pickup_address}</Muted></Row>
           <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{item.drop_address}</Muted></Row>

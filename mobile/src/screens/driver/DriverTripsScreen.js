@@ -6,6 +6,7 @@ import { AmbulanceApi } from '../../api';
 import { Card, Pill, Muted, Row, AppButton, EmptyState, Loader } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -38,7 +39,7 @@ export default function DriverTripsScreen({ navigation }) {
           <Card style={styles.card} onPress={() => navigation.navigate('DriverTripDetail', { trip: item })}>
             <Row style={{ justifyContent: 'space-between' }}>
               <Text style={styles.patient}>{item.patient_name}</Text>
-              <Pill label={item.status.replace(/_/g, ' ')} color={STATUS_COLOR[item.status] || colors.textMuted} />
+              <Pill label={statusLabel(item.status)} color={STATUS_COLOR[item.status] || colors.textMuted} />
             </Row>
             <Muted style={{ marginTop: 6 }}>{item.pickup_address}</Muted>
             <Muted>{item.drop_address}</Muted>

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, Linking, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
@@ -7,6 +7,7 @@ import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState } from '../../com
 import Icon from '../../components/Icon';
 import LiveTrackingMap from '../../components/LiveTrackingMap';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
 
 // Statuses during which the trip is live and worth showing the map — from the
@@ -32,6 +33,8 @@ export default function AmbulanceDetailScreen({ route }) {
     try { setR(await AmbulanceApi.requestDetail(id)); } catch (e) { setErr(true); Alert.alert('Error', errMessage(e)); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const status = r?.status;
   const isTrackable = TRACKABLE.includes(status);
@@ -70,11 +73,12 @@ export default function AmbulanceDetailScreen({ route }) {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ambulance} />}>
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text style={styles.title}>{r.patient_name}</Text>
-          <Pill label={r.status.replace(/_/g, ' ')} color={cancelled ? colors.danger : colors.ambulance} />
+          <Pill label={statusLabel(r.status)} color={cancelled ? colors.danger : colors.ambulance} />
         </Row>
         <Row style={{ marginTop: spacing.sm }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Pickup: {r.pickup_address}</Muted></Row>
         <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Drop: {r.drop_address}</Muted></Row>

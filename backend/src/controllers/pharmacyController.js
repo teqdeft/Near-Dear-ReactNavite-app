@@ -1,9 +1,13 @@
+const path = require('path');
+const fs = require('fs');
 const db = require('../db/knex');
 const config = require('../config');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
+const { UPLOAD_ROOT } = require('../middleware/upload');
+const { renameUpload } = require('../utils/fileNaming');
 const {
   ROLES, PHARMACY_APPROVAL, DOC_TYPE, DOC_STATUS, ORDER_STATUS,
   PRESCRIPTION_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, MEDICINE_FORM,
@@ -94,14 +98,47 @@ const uploadDocument = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
   if (!req.file) throw ApiError.badRequest('A document file is required');
   const documentType = req.body.document_type || DOC_TYPE.OTHER;
-  const relPath = `pharmacy_docs/${req.file.filename}`;
+  // Save under the pharmacy's name + id + document type so it's identifiable in
+  // the uploads folder (e.g. "apollo-pharmacy_12_license_<time>.jpg").
+  const relPath = renameUpload(req.file, 'pharmacy_docs', [pharmacy.pharmacy_name, pharmacy.id, documentType]);
 
-  const [id] = await db('pharmacy_documents').insert({
-    pharmacy_id: pharmacy.id,
-    document_type: documentType,
-    file_url: relPath,
-    status: DOC_STATUS.PENDING,
-  });
+  // One document per type: re-uploading (e.g. a renewed drug license) REPLACES
+  // the existing file instead of piling up duplicates, and resets it to pending
+  // for admin re-review.
+  const existing = await db('pharmacy_documents')
+    .where({ pharmacy_id: pharmacy.id, document_type: documentType })
+    .first();
+  let id;
+  if (existing) {
+    await db('pharmacy_documents').where({ id: existing.id })
+      .update({ file_url: relPath, status: DOC_STATUS.PENDING });
+    id = existing.id;
+    // Best-effort: delete the old file from disk so replaced files don't linger.
+    if (existing.file_url) fs.unlink(path.join(UPLOAD_ROOT, existing.file_url), () => {});
+  } else {
+    [id] = await db('pharmacy_documents').insert({
+      pharmacy_id: pharmacy.id,
+      document_type: documentType,
+      file_url: relPath,
+      status: DOC_STATUS.PENDING,
+    });
+  }
+
+  // If the pharmacy was already approved, changing a document means it must be
+  // re-verified — send it back to pending (selling stops until re-approved) and
+  // alert the admins that a re-review is waiting.
+  if (pharmacy.approval_status === PHARMACY_APPROVAL.APPROVED) {
+    await db('pharmacies').where({ id: pharmacy.id })
+      .update({ approval_status: PHARMACY_APPROVAL.PENDING, approved_at: null, approved_by: null });
+    const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
+    await Promise.all(admins.map((a) => notify(a.id, {
+      title: 'Pharmacy document re-uploaded',
+      message: `${pharmacy.pharmacy_name} re-uploaded a document — needs re-approval.`,
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: pharmacy.id,
+    })));
+  }
+
   const doc = await db('pharmacy_documents').where({ id }).first();
   return created(res, { ...doc, url: fileUrl(doc.file_url) }, 'Document uploaded');
 });

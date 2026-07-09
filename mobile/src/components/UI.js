@@ -10,7 +10,7 @@ import Icon from './Icon';
 export { Icon };
 
 // ---- Screen wrapper ---------------------------------------------------
-export function Screen({ children, scroll = false, style, padded = true, edges = ['top'] }) {
+export function Screen({ children, scroll = false, style, padded = true, edges = ['top'], refreshControl }) {
   const inner = (
     <View style={[padded && { padding: spacing.lg }, { flexGrow: 1 }, style]}>{children}</View>
   );
@@ -18,7 +18,8 @@ export function Screen({ children, scroll = false, style, padded = true, edges =
     <SafeAreaView style={styles.screen} edges={edges}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
       {scroll ? (
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1 }} refreshControl={refreshControl}>
           {inner}
         </ScrollView>
       ) : (

@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { Text, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
+import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField } from '../../components/UI';
 import { colors, spacing, font } from '../../theme';
 
 export default function ChangePasswordScreen({ navigation }) {
+  const { isDriver } = useAuth();
+  const accent = isDriver ? colors.ambulance : colors.primary;
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -36,7 +39,7 @@ export default function ChangePasswordScreen({ navigation }) {
         <TextField label="New password" leftIcon="lock" placeholder="••••••" secureTextEntry value={password} onChangeText={setPassword} />
         <TextField label="Confirm new password" leftIcon="lock" placeholder="••••••" secureTextEntry value={confirm} onChangeText={setConfirm} />
 
-        <AppButton title="Update password" onPress={onUpdate} loading={loading} style={{ marginTop: spacing.sm }} />
+        <AppButton title="Update password" color={accent} onPress={onUpdate} loading={loading} style={{ marginTop: spacing.sm }} />
       </KeyboardAvoidingView>
     </Screen>
   );

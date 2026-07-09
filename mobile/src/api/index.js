@@ -17,6 +17,10 @@ export const AuthApi = {
   me: () => data(client.get('/auth/me')),
   aadhaarGenerateOtp: (aadhaarNumber) => data(client.post('/auth/aadhaar/generate-otp', { aadhaarNumber })),
   aadhaarVerify: (otp) => data(client.post('/auth/aadhaar/verify', { otp })),
+  // Manual KYC: upload front + back Aadhaar photos for admin review.
+  aadhaarManualSubmit: (formData) =>
+    data(client.post('/auth/aadhaar/manual', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
+  aadhaarManualStatus: () => data(client.get('/auth/aadhaar/manual/status')),
 };
 
 export const ProfileApi = {
@@ -53,6 +57,7 @@ export const AmbulanceApi = {
   driverRequests: () => data(client.get('/ambulance/driver/requests')),
   driverAvailable: () => data(client.get('/ambulance/driver/available')),
   accept: (id) => data(client.post(`/ambulance/requests/${id}/accept`)),
+  release: (id) => data(client.post(`/ambulance/requests/${id}/release`)),
   updateStatus: (id, status) => data(client.put(`/ambulance/requests/${id}/status`, { status })),
   // Live tracking
   track: (id) => data(client.get(`/ambulance/requests/${id}/track`)),

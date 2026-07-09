@@ -12,6 +12,7 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminBloodRequests from './pages/admin/AdminBloodRequests';
 import AdminAmbulance from './pages/admin/AdminAmbulance';
 import AdminAmbulanceVehicles from './pages/admin/AdminAmbulanceVehicles';
+import AdminAadhaar from './pages/admin/AdminAadhaar';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminSupport from './pages/admin/AdminSupport';
 import AdminAudit from './pages/admin/AdminAudit';
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/pharmacies" element={<AdminPharmacies />} />
         <Route path="/admin/ambulance-vehicles" element={<AdminAmbulanceVehicles />} />
+        <Route path="/admin/aadhaar" element={<AdminAadhaar />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/blood-requests" element={<AdminBloodRequests />} />
         <Route path="/admin/ambulance" element={<AdminAmbulance />} />

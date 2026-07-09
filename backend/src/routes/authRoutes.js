@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { body } = require('express-validator');
 const { validate } = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
+const { upload, intoFolder } = require('../middleware/upload');
 const c = require('../controllers/authController');
 
 const mobileRule = body('mobile').isString().isLength({ min: 10, max: 15 }).withMessage('Valid mobile required');
@@ -57,8 +58,18 @@ router.post('/admin-login', [mobileRule, body('password').notEmpty(), validate],
 router.post('/refresh', c.refresh);
 router.get('/me', authenticate, c.me);
 
-// Aadhaar KYC
+// Aadhaar KYC — automated OTP (Surepass) flow
 router.post('/aadhaar/generate-otp', [authenticate, body('aadhaarNumber').notEmpty(), validate], c.aadhaarGenerateOtp);
 router.post('/aadhaar/verify', [authenticate, body('otp').notEmpty(), validate], c.aadhaarVerify);
+
+// Aadhaar KYC — manual flow: upload front + back photos for admin review.
+router.post(
+  '/aadhaar/manual',
+  authenticate,
+  intoFolder('aadhaar_docs'),
+  upload.fields([{ name: 'front', maxCount: 1 }, { name: 'back', maxCount: 1 }]),
+  c.aadhaarManualSubmit
+);
+router.get('/aadhaar/manual/status', authenticate, c.aadhaarManualStatus);
 
 module.exports = router;

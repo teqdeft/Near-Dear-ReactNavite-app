@@ -6,7 +6,7 @@ import { Text } from 'react-native';
 
 import { useAuth } from '../store/AuthContext';
 import { colors, font } from '../theme';
-import { Loader } from '../components/UI';
+import AppSplash from '../components/AppSplash';
 import AnimatedTabBar from '../components/AnimatedTabBar';
 
 // Auth
@@ -15,6 +15,7 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 import OtpScreen from '../screens/auth/OtpScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import AadhaarVerifyScreen from '../screens/auth/AadhaarVerifyScreen';
+import AadhaarUploadScreen from '../screens/auth/AadhaarUploadScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
@@ -99,10 +100,10 @@ const headerStyle = {
 export default function RootNavigator() {
   const { booting, isLoggedIn, profileComplete, isDriver } = useAuth();
 
-  if (booting) return <Loader text="Loading NearDear…" />;
+  if (booting) return <AppSplash />;
 
   return (
-    <Stack.Navigator screenOptions={headerStyle}>
+    <Stack.Navigator screenOptions={{ ...headerStyle, headerTintColor: isDriver ? colors.ambulance : colors.primary }}>
       {!isLoggedIn ? (
         <>
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -118,6 +119,7 @@ export default function RootNavigator() {
         <>
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} options={{ title: 'Complete your profile' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
+          <Stack.Screen name="AadhaarUpload" component={AadhaarUploadScreen} options={{ title: 'Verify Aadhaar' }} />
         </>
       ) : isDriver ? (
         <>
@@ -129,6 +131,7 @@ export default function RootNavigator() {
           <Stack.Screen name="EmergencyHelp" component={EmergencyHelpScreen} options={{ title: 'Emergency Help' }} />
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change password' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
+          <Stack.Screen name="AadhaarUpload" component={AadhaarUploadScreen} options={{ title: 'Verify Aadhaar' }} />
           <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
         </>
       ) : (
@@ -136,6 +139,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change password' }} />
           <Stack.Screen name="AadhaarVerify" component={AadhaarVerifyScreen} options={{ title: 'Aadhaar Verification' }} />
+          <Stack.Screen name="AadhaarUpload" component={AadhaarUploadScreen} options={{ title: 'Verify Aadhaar' }} />
 
           {/* Blood module */}
           <Stack.Screen name="BloodHome" component={BloodHomeScreen} options={{ title: 'Blood Donation' }} />

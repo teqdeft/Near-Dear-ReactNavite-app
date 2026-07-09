@@ -50,9 +50,23 @@ const BADGE = {
   rejected: 'red', suspended: 'red', blocked: 'red', cancelled: 'red', failed: 'red', out_of_stock: 'red',
 };
 
+// Production-ready, human labels for the raw status enums. Anything not listed
+// falls back to a Title-cased version of the raw value.
+const BADGE_LABEL = {
+  pending: 'Pending review', under_review: 'Under review', approved: 'Approved', rejected: 'Rejected',
+  suspended: 'Suspended', active: 'Active', blocked: 'Blocked', deleted: 'Deleted', verified: 'Verified',
+  uploaded: 'Uploaded',
+  placed: 'Order placed', accepted: 'Accepted', preparing: 'Preparing', out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered', cancelled: 'Cancelled', failed: 'Failed', paid: 'Paid',
+  requested: 'Requested', assigned: 'Assigned', on_the_way: 'On the way', picked_up: 'Picked up', completed: 'Completed',
+  open: 'Open', matched: 'Matched', fulfilled: 'Fulfilled', expired: 'Expired',
+  in_stock: 'In stock', out_of_stock: 'Out of stock', resolved: 'Resolved', in_progress: 'In progress',
+};
+
 export function Badge({ value }) {
   const tone = BADGE[value] || 'gray';
-  return <span className={`badge ${tone}`}>{String(value || '').replace(/_/g, ' ')}</span>;
+  const label = BADGE_LABEL[value] || String(value || '').replace(/_/g, ' ');
+  return <span className={`badge ${tone}`}>{label}</span>;
 }
 
 export function Stat({ label, value, icon }) {

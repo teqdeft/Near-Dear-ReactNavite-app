@@ -1,11 +1,72 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../store/AuthContext';
+import { useNotifications } from '../store/NotificationContext';
 import Icon from '../components/Icon';
 import ProfileAvatar from '../components/ProfileAvatar';
 import GradientBackground from '../components/GradientBackground';
 import { colors, spacing, font, radius, shadow } from '../theme';
+
+function VerifyNowPill({ onPress }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.55] });
+
+  return (
+    <Animated.View style={{ transform: [{ scale }], opacity }}>
+      <TouchableOpacity style={[styles.statusPill, styles.unverifiedPill]} onPress={onPress}>
+        <Icon name="shield-alert-outline" size={16} color={colors.warning} />
+        <Text style={styles.unverifiedText}>Verify now</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function NotificationBell({ badge, onPress }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!badge) { pulse.setValue(0); return undefined; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 800, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [badge, pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
+  return (
+    <TouchableOpacity style={styles.bell} onPress={onPress} activeOpacity={0.85}>
+      <Icon name="bell" size={20} color={colors.text} />
+      {badge ? (
+        <View pointerEvents="none">
+          <Animated.View style={[styles.bellPulse, { opacity: ringOpacity, transform: [{ scale }] }]} />
+          <View style={styles.bellBadge}>
+            <Text style={styles.bellBadgeText}>{badge}</Text>
+          </View>
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
+}
 
 function ArrowBadge({ color = colors.text, bg = colors.white }) {
   return (
@@ -29,40 +90,50 @@ const QUICK = [
 
 export default function HomeScreen({ navigation }) {
   const { user, profile, aadhaarVerified } = useAuth();
+  const { unread } = useNotifications();
   const firstName = (user?.name || 'there').split(' ')[0];
+  const badge = unread > 0 ? (unread > 99 ? '99+' : String(unread)) : null;
+  // KYC is pending while a manual Aadhaar submission is awaiting admin review.
+  const aadhaarPending = user?.aadhaar_kyc_status === 'pending';
 
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
-          {/* Top row */}
+          {/* Top row - Profile, Verify Badge, and Bell */}
           <View style={styles.topRow}>
-            {aadhaarVerified ? (
-              <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
-                <Icon name="check-decagram" size={16} color={colors.white} />
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            ) : (
-              <TouchableOpacity style={[styles.statusPill, styles.unverifiedPill]} onPress={() => navigation.navigate('AadhaarVerify')}>
-                <Icon name="shield-alert-outline" size={16} color={colors.warning} />
-                <Text style={styles.unverifiedText}>Verify now</Text>
+            <View style={styles.profileSection}>
+              {/* Profile Avatar */}
+              <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Profile')} style={styles.avatarWrap}>
+                <ProfileAvatar path={profile?.profile_image} name={user?.name} size={78} />
               </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.bell} onPress={() => navigation.navigate('Alerts')}>
-              <Icon name="bell" size={20} color={colors.text} />
-            </TouchableOpacity>
+              
+              {/* Verified / Under review / Verify now badge */}
+              {aadhaarVerified ? (
+                <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
+                  <Icon name="check-decagram" size={16} color={colors.white} />
+                  <Text style={styles.verifiedText}>Verified</Text>
+                </View>
+              ) : aadhaarPending ? (
+                <TouchableOpacity style={[styles.statusPill, styles.reviewPill]} onPress={() => navigation.navigate('AadhaarUpload')}>
+                  <Icon name="clock" size={16} color={colors.warning} />
+                  <Text style={styles.reviewText}>Under review</Text>
+                </TouchableOpacity>
+              ) : (
+                <VerifyNowPill onPress={() => navigation.navigate('AadhaarUpload')} />
+              )}
+            </View>
+            
+            <NotificationBell badge={badge} onPress={() => navigation.navigate('Alerts')} />
           </View>
 
-          {/* Greeting + profile avatar (tap to open Profile) */}
+          {/* Greeting */}
           <View style={styles.greetRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.welcome}>WELCOME BACK</Text>
               <Text style={styles.hello}>Hello,</Text>
               <Text style={styles.name}>{firstName}.</Text>
             </View>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Profile')} style={[styles.avatarWrap, shadow.card]}>
-              <ProfileAvatar path={profile?.profile_image} name={user?.name} size={94} />
-            </TouchableOpacity>
           </View>
           <Text style={styles.tagline}>Your health, one tap away. What do you need help with today?</Text>
 
@@ -133,17 +204,30 @@ export default function HomeScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
+  profileSection: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, ...shadow.soft },
   verifiedText: { marginLeft: 6, color: colors.white, fontWeight: font.bold, fontSize: font.small },
   unverifiedPill: { backgroundColor: colors.white, borderWidth: 1, borderColor: '#F6E3B8' },
   unverifiedText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
+  reviewPill: { backgroundColor: '#FFF4E0', borderWidth: 1, borderColor: '#F6E3B8' },
+  reviewText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
   bell: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
+  bellBadge: {
+    position: 'absolute', top: -16, right: -14, minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: colors.blood, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4, borderWidth: 2, borderColor: colors.white,
+  },
+  bellBadgeText: { color: colors.white, fontSize: 10, fontWeight: font.bold, textAlign: 'center', includeFontPadding: false },
+  bellPulse: {
+    position: 'absolute', top: -16, right: -14, width: 18, height: 18, borderRadius: 9,
+    backgroundColor: colors.blood,
+  },
 
-  greetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  avatarWrap: { borderRadius: 49, padding: 2, backgroundColor: colors.white, marginLeft: spacing.md },
+  greetRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  avatarWrap: { borderRadius: 43, padding: 2, backgroundColor: colors.white, marginRight: 0 },
   welcome: { color: colors.textMuted, fontSize: font.tiny, fontWeight: font.bold, letterSpacing: 1.5 },
-  hello: { fontSize: 40, fontWeight: font.bold, color: colors.text, marginTop: 6, lineHeight: 44 },
-  name: { fontSize: 40, fontWeight: font.bold, color: colors.primary, lineHeight: 44 },
+  hello: { fontSize: 30, fontWeight: font.bold, color: colors.text, marginTop: 4, lineHeight: 36 },
+  name: { fontSize: 36, fontWeight: font.bold, color: colors.primary, lineHeight: 30 },
   tagline: { color: colors.textMuted, fontSize: font.body, marginTop: spacing.md, marginBottom: spacing.xl, lineHeight: 21 },
 
   sos: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, padding: spacing.lg, backgroundColor: colors.blood },

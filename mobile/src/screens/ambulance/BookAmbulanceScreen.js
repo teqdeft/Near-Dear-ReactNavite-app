@@ -25,7 +25,7 @@ export default function BookAmbulanceScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  if (!aadhaarVerified) return <KycGate navigation={navigation} action="book an ambulance" />;
+  if (!aadhaarVerified) return <KycGate navigation={navigation} action="book an ambulance" accent={colors.ambulance} />;
 
   const submit = async () => {
     for (const k of ['patient_name', 'contact_mobile', 'pickup_address', 'drop_address', 'city']) {

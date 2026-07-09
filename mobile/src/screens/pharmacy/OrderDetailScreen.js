@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, Linking, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle, EmptyState } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
 
 const TERMINAL = ['delivered', 'cancelled', 'rejected'];
@@ -27,6 +28,8 @@ export default function OrderDetailScreen({ route, navigation }) {
     try { setData(await OrderApi.orderDetail(id)); } catch (e) { setErr(true); Alert.alert('Error', errMessage(e)); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
@@ -73,11 +76,12 @@ export default function OrderDetailScreen({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.pharmacy} />}>
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text style={styles.num}>{order.order_number}</Text>
-          <Pill label={order.order_status.replace(/_/g, ' ')} color={STATUS_COLOR[order.order_status] || colors.textMuted} />
+          <Pill label={statusLabel(order.order_status)} color={STATUS_COLOR[order.order_status] || colors.textMuted} />
         </Row>
         <Muted style={{ marginTop: 4 }}>{order.pharmacy_name}</Muted>
         {order.created_at ? <Muted style={{ marginTop: 2 }}>Placed: {formatDateTime(order.created_at)}</Muted> : null}
@@ -110,7 +114,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Row key={h.id} style={[styles.histRow, idx > 0 && styles.itemBorder]}>
             <View style={styles.histDot} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.histStatus}>{h.status.replace(/_/g, ' ')}</Text>
+              <Text style={styles.histStatus}>{statusLabel(h.status)}</Text>
               {h.note ? <Muted style={{ marginTop: 2 }}>{h.note}</Muted> : null}
             </View>
             {h.created_at ? <Muted style={{ marginLeft: 8 }}>{formatDateTime(h.created_at)}</Muted> : null}

@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const db = require('../db/knex');
+const config = require('../config');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -8,10 +9,12 @@ const { logAction } = require('../services/auditService');
 const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const {
   ROLES, USER_STATUS, PHARMACY_APPROVAL, AMBULANCE_STATUS,
-  SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, AMBULANCE_APPROVAL,
+  SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, AMBULANCE_APPROVAL, DOC_STATUS,
+  AADHAAR_KYC_STATUS,
 } = require('../constants/enums');
 
 const ip = (req) => req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+const fileUrl = (p) => (p ? `${config.appUrl}/api/v1/files/${p}` : null);
 
 // GET /admin/dashboard
 const dashboard = asyncHandler(async (req, res) => {
@@ -132,6 +135,15 @@ const reviewPharmacy = asyncHandler(async (req, res) => {
     approved_by: req.user.id,
     approved_at: status === PHARMACY_APPROVAL.APPROVED ? db.fn.now() : null,
   });
+
+  // Keep the pharmacy's documents in sync with the decision so their status
+  // matches in the admin panel and the pharmacy panel instead of staying
+  // "pending". (Suspension is operational — it leaves the docs untouched.)
+  if (status === PHARMACY_APPROVAL.APPROVED || status === PHARMACY_APPROVAL.REJECTED) {
+    await db('pharmacy_documents').where({ pharmacy_id: pharmacy.id }).update({
+      status: status === PHARMACY_APPROVAL.APPROVED ? DOC_STATUS.APPROVED : DOC_STATUS.REJECTED,
+    });
+  }
   await logAction(req.user.id, { action: `pharmacy_${status}`, entityType: 'pharmacy', entityId: pharmacy.id, oldValue: { status: pharmacy.approval_status }, newValue: { status }, ip: ip(req) });
   await notify(pharmacy.owner_user_id, {
     title: `Pharmacy ${status}`,
@@ -196,6 +208,13 @@ const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
     // An approved ambulance becomes available; a rejected one stays inactive.
     status: status === AMBULANCE_APPROVAL.APPROVED ? 'available' : 'inactive',
   });
+
+  // Keep the driver's documents (e.g. driving license) in sync with the
+  // decision, so the same approved/rejected status shows in the admin panel
+  // and the driver app instead of staying stuck on "pending".
+  await db('ambulance_documents').where({ ambulance_id: vehicle.id }).update({
+    status: status === AMBULANCE_APPROVAL.APPROVED ? DOC_STATUS.APPROVED : DOC_STATUS.REJECTED,
+  });
   await logAction(req.user.id, { action: `ambulance_${status}`, entityType: 'ambulance', entityId: vehicle.id, oldValue: { status: vehicle.approval_status }, newValue: { status }, ip: ip(req) });
   if (vehicle.driver_user_id) {
     await notify(vehicle.driver_user_id, {
@@ -208,6 +227,74 @@ const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
     });
   }
   return ok(res, { status }, `Ambulance ${status}`);
+});
+
+// ---- Aadhaar manual KYC (users upload card photos → admin verifies) ---
+// GET /admin/aadhaar?status=
+const listAadhaarSubmissions = asyncHandler(async (req, res) => {
+  const q = db('aadhaar_kyc_submissions as s')
+    .join('users as u', 'u.id', 's.user_id')
+    .select('s.id', 's.status', 's.rejection_reason', 's.created_at', 's.reviewed_at',
+      's.user_id', 'u.name as user_name', 'u.mobile as user_mobile', 'u.email as user_email',
+      'u.aadhaar_kyc_status');
+  if (req.query.status) q.andWhere('s.status', req.query.status);
+  const rows = await q.orderBy('s.id', 'desc').limit(200);
+  return ok(res, rows);
+});
+
+// GET /admin/aadhaar/:id
+const aadhaarSubmissionDetail = asyncHandler(async (req, res) => {
+  const submission = await db('aadhaar_kyc_submissions as s')
+    .join('users as u', 'u.id', 's.user_id')
+    .where('s.id', req.params.id)
+    .select('s.*', 'u.name as user_name', 'u.mobile as user_mobile', 'u.email as user_email',
+      'u.aadhaar_kyc_status')
+    .first();
+  if (!submission) throw ApiError.notFound('Submission not found');
+  return ok(res, {
+    ...submission,
+    front_url_full: fileUrl(submission.front_url),
+    back_url_full: fileUrl(submission.back_url),
+  });
+});
+
+// PUT /admin/aadhaar/:id/review  { status: approved | rejected, reason? }
+const reviewAadhaarSubmission = asyncHandler(async (req, res) => {
+  const { status, reason } = req.body;
+  if (!['approved', 'rejected'].includes(status)) throw ApiError.badRequest('Invalid review status');
+  const submission = await db('aadhaar_kyc_submissions').where({ id: req.params.id }).first();
+  if (!submission) throw ApiError.notFound('Submission not found');
+
+  // Only a pending submission can be decided — block re-deciding a settled one.
+  if (submission.status !== 'pending') {
+    throw ApiError.conflict(`This submission was already ${submission.status}.`);
+  }
+
+  await db('aadhaar_kyc_submissions').where({ id: submission.id }).update({
+    status,
+    rejection_reason: status === 'rejected' ? (reason || 'Rejected') : null,
+    reviewed_by: req.user.id,
+    reviewed_at: db.fn.now(),
+  });
+
+  await db('users').where({ id: submission.user_id }).update({
+    aadhaar_kyc_status: status === 'approved' ? AADHAAR_KYC_STATUS.VERIFIED : AADHAAR_KYC_STATUS.FAILED,
+    aadhaar_verified_at: status === 'approved' ? db.fn.now() : null,
+  });
+
+  await logAction(req.user.id, {
+    action: `aadhaar_${status}`, entityType: 'aadhaar_submission', entityId: submission.id,
+    oldValue: { status: submission.status }, newValue: { status }, ip: ip(req),
+  });
+  await notify(submission.user_id, {
+    title: status === 'approved' ? 'Aadhaar verified' : 'Aadhaar verification failed',
+    message: status === 'approved'
+      ? 'Your Aadhaar has been verified successfully. Your account is now verified.'
+      : `Your Aadhaar verification was rejected. ${reason || 'Please re-upload clear photos of your Aadhaar card.'}`.trim(),
+    type: NOTIFICATION_TYPE.ADMIN,
+    referenceId: submission.id,
+  });
+  return ok(res, { status }, `Aadhaar ${status}`);
 });
 
 // ---- Blood requests ---------------------------------------------------
@@ -392,6 +479,7 @@ module.exports = {
   dashboard, listUsers, setUserStatus, deleteUser,
   listPharmacies, pharmacyDetail, reviewPharmacy,
   listAmbulanceVehicles, ambulanceVehicleDetail, reviewAmbulanceVehicle,
+  listAadhaarSubmissions, aadhaarSubmissionDetail, reviewAadhaarSubmission,
   listBloodRequests, setBloodRequestStatus,
   listAmbulanceRequests, assignAmbulance, addProvider, addAmbulance, listAmbulances,
   createDriver, listDrivers,

@@ -10,11 +10,14 @@ import DriverTripMap from '../../components/DriverTripMap';
 import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState, IconBadge } from '../../components/UI';
 import KycGate from '../../components/KycGate';
 import Icon from '../../components/Icon';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font, radius, shadow } from '../../theme';
 
 const NEXT = { accepted: 'on_the_way', on_the_way: 'picked_up', picked_up: 'completed' };
 const NEXT_LABEL = { accepted: 'Start trip (on the way)', on_the_way: 'Mark picked up', picked_up: 'Complete trip' };
 const ACTIVE = ['accepted', 'on_the_way', 'picked_up'];
+// A trip can be cancelled (re-opened for others) only before the patient is picked up.
+const RELEASABLE = ['accepted', 'on_the_way'];
 
 export default function DriverDashboardScreen({ navigation }) {
   const { user, aadhaarVerified } = useAuth();
@@ -59,6 +62,23 @@ export default function DriverDashboardScreen({ navigation }) {
     catch (e) { Alert.alert('Error', errMessage(e)); } finally { setBusyId(null); }
   };
 
+  // Drop an accepted trip (e.g. accepted by mistake) — it re-opens for other
+  // nearby drivers instead of cancelling the patient's request.
+  const release = (req) => {
+    Alert.alert(
+      'Cancel this trip?',
+      'The request will be re-opened for other nearby drivers. Do this only if you can’t make the trip.',
+      [
+        { text: 'Keep trip', style: 'cancel' },
+        { text: 'Cancel trip', style: 'destructive', onPress: async () => {
+          setBusyId(req.id);
+          try { await AmbulanceApi.release(req.id); await load(); }
+          catch (e) { Alert.alert('Error', errMessage(e)); } finally { setBusyId(null); }
+        } },
+      ],
+    );
+  };
+
   const activeTrips = mine.filter((m) => ACTIVE.includes(m.status));
 
   // Auto-share GPS while a trip is moving (on the way / picked up).
@@ -66,7 +86,7 @@ export default function DriverDashboardScreen({ navigation }) {
   useDriverLocationTracker(trackingTrip?.id, !!trackingTrip);
 
   if (available === null) return <Loader />;
-  if (!aadhaarVerified) return <KycGate navigation={navigation} action="accept ambulance rides" />;
+  if (!aadhaarVerified) return <KycGate navigation={navigation} action="accept ambulance rides" accent={colors.ambulance} />;
 
   // Vehicle must be admin-approved before the driver can work.
   const veh = vehicle?.vehicle;
@@ -116,7 +136,7 @@ export default function DriverDashboardScreen({ navigation }) {
               <Card key={t.id} style={[styles.activeCard, shadow.card]}>
                 <Row style={{ justifyContent: 'space-between' }}>
                   <Text style={styles.patient}>{t.patient_name}</Text>
-                  <Pill label={t.status.replace(/_/g, ' ')} color={colors.ambulance} />
+                  <Pill label={statusLabel(t.status)} color={colors.ambulance} />
                 </Row>
                 <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{t.pickup_address}</Muted></Row>
                 <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{t.drop_address}</Muted></Row>
@@ -126,6 +146,10 @@ export default function DriverDashboardScreen({ navigation }) {
                   <AppButton title="Call" icon="phone" variant="outline" color={colors.success} style={{ flex: 1, marginRight: spacing.sm }} onPress={() => Linking.openURL(`tel:${t.contact_mobile}`)} />
                   {NEXT[t.status] ? <AppButton title={NEXT_LABEL[t.status]} color={colors.ambulance} loading={busyId === t.id} style={{ flex: 1.4 }} onPress={() => advance(t)} /> : null}
                 </Row>
+                {RELEASABLE.includes(t.status) ? (
+                  <AppButton title="Cancel trip" variant="outline" color={colors.danger}
+                    loading={busyId === t.id} style={{ marginTop: spacing.sm }} onPress={() => release(t)} />
+                ) : null}
               </Card>
             ))}
           </>

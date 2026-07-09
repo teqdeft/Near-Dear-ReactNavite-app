@@ -18,6 +18,11 @@ router.get('/pharmacies', c.listPharmacies);
 router.get('/pharmacies/:id', c.pharmacyDetail);
 router.put('/pharmacies/:id/review', c.reviewPharmacy);
 
+// Aadhaar manual KYC submissions (users upload card photos → admin verifies)
+router.get('/aadhaar', c.listAadhaarSubmissions);
+router.get('/aadhaar/:id', c.aadhaarSubmissionDetail);
+router.put('/aadhaar/:id/review', c.reviewAadhaarSubmission);
+
 // Blood requests
 router.get('/blood-requests', c.listBloodRequests);
 router.put('/blood-requests/:id/status', c.setBloodRequestStatus);

@@ -56,6 +56,14 @@ const serve = asyncHandler(async (req, res) => {
       .first();
     const isOwner = doc && doc.driver_user_id === user.id;
     if (!isAdmin && !isOwner) throw ApiError.forbidden();
+  } else if (relPath.startsWith('aadhaar_docs/')) {
+    // Aadhaar card photos are sensitive — only the owner or an admin may view.
+    const sub = await db('aadhaar_kyc_submissions')
+      .where('front_url', relPath)
+      .orWhere('back_url', relPath)
+      .first();
+    const isOwner = sub && sub.user_id === user.id;
+    if (!isAdmin && !isOwner) throw ApiError.forbidden();
   }
   // Other folders (e.g. profile images) are accessible to any authenticated user.
 

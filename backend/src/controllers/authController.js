@@ -7,7 +7,10 @@ const { issueTokens, verifyRefreshToken, signAccessToken } = require('../utils/j
 const otpService = require('../services/otpService');
 const aadhaarService = require('../services/aadhaarService');
 const { presentUser } = require('../utils/present');
+const { renameUpload } = require('../utils/fileNaming');
 const config = require('../config');
+
+const fileUrl = (p) => (p ? `${config.appUrl}/api/v1/files/${p}` : null);
 const { ROLES, USER_STATUS, AADHAAR_KYC_STATUS } = require('../constants/enums');
 
 // Resolve the OTP destination from the chosen channel.
@@ -290,6 +293,66 @@ const aadhaarVerify = asyncHandler(async (req, res) => {
   return ok(res, { user: presentUser(user) }, 'Aadhaar verified successfully');
 });
 
+// ---- Aadhaar manual KYC (photo upload → admin review) -----------------
+
+// POST /auth/aadhaar/manual  (multipart: front, back) — user uploads photos of
+// the front and back of their Aadhaar card for an admin to verify manually.
+const aadhaarManualSubmit = asyncHandler(async (req, res) => {
+  if (req.user.aadhaar_kyc_status === AADHAAR_KYC_STATUS.VERIFIED) {
+    throw ApiError.conflict('Your Aadhaar is already verified.');
+  }
+  const front = req.files?.front?.[0];
+  const back = req.files?.back?.[0];
+  if (!front || !back) throw ApiError.badRequest('Both front and back photos of your Aadhaar are required.');
+
+  const owner = await db('users').where({ id: req.user.id }).first();
+  const frontPath = renameUpload(front, 'aadhaar_docs', [owner?.name, req.user.id, 'aadhaar-front']);
+  const backPath = renameUpload(back, 'aadhaar_docs', [owner?.name, req.user.id, 'aadhaar-back']);
+
+  // Supersede any earlier pending submission so only the latest one is reviewed.
+  await db('aadhaar_kyc_submissions')
+    .where({ user_id: req.user.id, status: 'pending' })
+    .update({ status: 'rejected', rejection_reason: 'Superseded by a newer submission', reviewed_at: db.fn.now() });
+
+  const [id] = await db('aadhaar_kyc_submissions').insert({
+    user_id: req.user.id,
+    front_url: frontPath,
+    back_url: backPath,
+    status: 'pending',
+  });
+
+  await db('users').where({ id: req.user.id }).update({ aadhaar_kyc_status: AADHAAR_KYC_STATUS.PENDING });
+
+  const row = await db('aadhaar_kyc_submissions').where({ id }).first();
+  return created(res, {
+    id: row.id,
+    status: row.status,
+    front_url: fileUrl(row.front_url),
+    back_url: fileUrl(row.back_url),
+    created_at: row.created_at,
+  }, 'Aadhaar submitted for verification');
+});
+
+// GET /auth/aadhaar/manual/status — latest manual submission + current KYC state.
+const aadhaarManualStatus = asyncHandler(async (req, res) => {
+  const submission = await db('aadhaar_kyc_submissions')
+    .where({ user_id: req.user.id })
+    .orderBy('id', 'desc')
+    .first();
+  return ok(res, {
+    kyc_status: req.user.aadhaar_kyc_status,
+    submission: submission
+      ? {
+        id: submission.id,
+        status: submission.status,
+        rejection_reason: submission.rejection_reason,
+        created_at: submission.created_at,
+        reviewed_at: submission.reviewed_at,
+      }
+      : null,
+  });
+});
+
 module.exports = {
   requestOtp,
   verifyOtp,
@@ -304,4 +367,6 @@ module.exports = {
   me,
   aadhaarGenerateOtp,
   aadhaarVerify,
+  aadhaarManualSubmit,
+  aadhaarManualStatus,
 };

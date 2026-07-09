@@ -3,6 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Linking } from 'react-native';
 import { Card, Pill, Muted, Row, AppButton, SectionTitle } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
+import { statusLabel } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
 
 const STATUS_COLOR = {
@@ -30,7 +31,7 @@ export default function DriverTripDetailScreen({ route }) {
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <Text style={styles.title}>{trip.patient_name}</Text>
-          <Pill label={(status || '').replace(/_/g, ' ')} color={STATUS_COLOR[status] || colors.textMuted} />
+          <Pill label={statusLabel(status)} color={STATUS_COLOR[status] || colors.textMuted} />
         </Row>
         <Pill label={`Type: ${trip.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
         {trip.contact_mobile ? (
