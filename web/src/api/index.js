@@ -55,6 +55,7 @@ export const AdminApi = {
   aadhaarSubmissionDetail: (id) => data(client.get(`/admin/aadhaar/${id}`)),
   reviewAadhaar: (id, status, reason) => data(client.put(`/admin/aadhaar/${id}/review`, { status, reason })),
   bloodRequests: (status) => data(client.get('/admin/blood-requests', { params: status ? { status } : {} })),
+  bloodDonors: (available) => data(client.get('/admin/blood-donors', { params: available ? { available: 'true' } : {} })),
   ambulanceRequests: (status) => data(client.get('/admin/ambulance-requests', { params: status ? { status } : {} })),
   assignAmbulance: (id, payload) => data(client.put(`/admin/ambulance-requests/${id}/assign`, payload)),
   ambulances: () => data(client.get('/admin/ambulances')),

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Linking, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { AmbulanceApi } from '../../api';
@@ -7,6 +7,8 @@ import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import useDriverLocationTracker from '../../hooks/useDriverLocationTracker';
 import DriverTripMap from '../../components/DriverTripMap';
+import ProfileAvatar from '../../components/ProfileAvatar';
+import ProfilePreviewModal from '../../components/ProfilePreviewModal';
 import { Card, Pill, Muted, Row, AppButton, Loader, EmptyState, IconBadge } from '../../components/UI';
 import KycGate from '../../components/KycGate';
 import Icon from '../../components/Icon';
@@ -20,7 +22,8 @@ const ACTIVE = ['accepted', 'on_the_way', 'picked_up'];
 const RELEASABLE = ['accepted', 'on_the_way'];
 
 export default function DriverDashboardScreen({ navigation }) {
-  const { user, aadhaarVerified } = useAuth();
+  const { user, profile, aadhaarVerified } = useAuth();
+  const [preview, setPreview] = useState(false);
   const [available, setAvailable] = useState(null);
   const [mine, setMine] = useState([]);
   const [vehicle, setVehicle] = useState(undefined); // undefined=loading, null=none, obj={vehicle,documents}
@@ -118,14 +121,30 @@ export default function DriverDashboardScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        {/* Top row — profile picture with the KYC badge attached, and online status. */}
+        <View style={styles.topRow}>
+          <View style={styles.profileSection}>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => setPreview(true)} style={styles.avatarWrap}>
+              <ProfileAvatar path={profile?.profile_image} name={user?.name} size={78} color={colors.ambulance} />
+            </TouchableOpacity>
+            {aadhaarVerified ? (
+              <View style={[styles.statusPill, { backgroundColor: colors.ambulance }]}>
+                <Icon name="check-decagram" size={13} color={colors.white} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.online}>
+            <Icon name="online" size={10} color={colors.success} />
+            <Text style={styles.onlineText}> Online</Text>
+          </View>
+        </View>
+
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hi, {(user?.name || 'Driver').split(' ')[0]}</Text>
             <Text style={styles.role}>Ambulance Driver</Text>
-          </View>
-          <View style={styles.online}>
-            <Icon name="online" size={10} color={colors.success} />
-            <Text style={styles.onlineText}> Online</Text>
           </View>
         </View>
 
@@ -177,12 +196,24 @@ export default function DriverDashboardScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+
+      <ProfilePreviewModal
+        visible={preview}
+        onClose={() => setPreview(false)}
+        path={profile?.profile_image}
+        name={user?.name}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  profileSection: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  avatarWrap: { borderRadius: 43, padding: 2, backgroundColor: colors.white },
+  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radius.pill, ...shadow.soft },
+  verifiedText: { marginLeft: 4, color: colors.white, fontWeight: font.bold, fontSize: font.tiny },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   hello: { fontSize: font.h2, fontWeight: font.bold, color: colors.text },
   role: { color: colors.textMuted, fontSize: font.small, marginTop: 2 },

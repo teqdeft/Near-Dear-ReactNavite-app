@@ -3,8 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import { PharmacyApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
-import { Button, Badge, Loader, Modal, money, ErrorState, ReasonModal } from '../../components/UI';
+import { Button, Badge, Loader, Modal, money, ErrorState, ReasonModal, Pagination } from '../../components/UI';
 import Icon from '../../components/Icon';
+
+const PAGE_SIZE = 20;
 
 const NEXT_ACTIONS = {
   placed: [{ to: 'accepted', label: 'Accept', variant: 'success' }, { to: 'rejected', label: 'Reject', variant: 'danger' }],
@@ -28,12 +30,15 @@ export default function PharmacyOrders() {
   // straight to a pre-filtered list.
   const [searchParams, setSearchParams] = useSearchParams();
   const filter = searchParams.get('status') || '';
-  const setFilter = (f) => setSearchParams(f ? { status: f } : {}, { replace: true });
+  const [page, setPage] = useState(1);
+  // Changing the filter or the search term restarts the list at page 1.
+  const setFilter = (f) => { setPage(1); setSearchParams(f ? { status: f } : {}, { replace: true }); };
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const runSearch = () => { setPage(1); setQuery(search); };
   const { data, loading, error, reload } = useAsync(
-    () => PharmacyApi.orders({ status: filter || undefined, search: query || undefined }),
-    [filter, query],
+    () => PharmacyApi.orders({ status: filter || undefined, search: query || undefined, page, limit: PAGE_SIZE }),
+    [filter, query, page],
   );
   const [detail, setDetail] = useState(null);
 
@@ -53,7 +58,7 @@ export default function PharmacyOrders() {
     }
   };
 
-  const rows = data || [];
+  const rows = data?.items || [];
 
   return (
     <>
@@ -68,8 +73,8 @@ export default function PharmacyOrders() {
       <div className="toolbar">
         <input className="input" style={{ maxWidth: 260 }} placeholder="Search order no, name or mobile…"
           value={search} onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && setQuery(search)} />
-        <Button variant="outline" onClick={() => setQuery(search)}>Search</Button>
+          onKeyDown={(e) => e.key === 'Enter' && runSearch()} />
+        <Button variant="outline" onClick={runSearch}>Search</Button>
       </div>
 
       {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
@@ -94,6 +99,8 @@ export default function PharmacyOrders() {
         </table>
       </div>
       )}
+
+      <Pagination page={data?.page || page} limit={data?.limit || PAGE_SIZE} total={data?.total || 0} onPage={setPage} />
 
       <Modal open={!!detail} onClose={closeDetail} title="Order details" width={620}>
         {detail && <OrderDetail id={detail} onChanged={() => { reload(); }} onClose={closeDetail} />}

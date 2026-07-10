@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>NearDear</title>
+    <script>
+      // Set the tab title from the URL path before React loads, so refreshing
+      // the pharmacy panel never flashes the admin title (or vice-versa).
+      (function () {
+        var p = location.pathname;
+        document.title = p.indexOf('/pharmacy') === 0 ? 'Pharmacy Panel'
+          : p.indexOf('/admin') === 0 ? 'Near dear Admin'
+          : 'NearDear';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

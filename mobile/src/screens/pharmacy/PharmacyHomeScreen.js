@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
@@ -16,12 +16,37 @@ const CAT_ICON = {
 export default function PharmacyHomeScreen({ navigation }) {
   const [categories, setCategories] = useState(null);
   const [search, setSearch] = useState('');
+  const [results, setResults] = useState(null); // null = no active search
+  const [searching, setSearching] = useState(false);
   const { count } = useCart();
 
   const load = useCallback(async () => {
     try { setCategories((await CatalogApi.categories()) || []); } catch (e) { setCategories([]); }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Live search: as the user types, fetch matching medicines ~300ms after they
+  // stop and show them in a dropdown below the search bar — no search key needed.
+  const debounceRef = useRef(null);
+  const runSearch = useCallback(async (q) => {
+    const term = q.trim();
+    if (!term) { setResults(null); setSearching(false); return; }
+    setSearching(true);
+    try {
+      const rows = await CatalogApi.medicines({ search: term, limit: 8 });
+      setResults(rows || []);
+    } catch (e) { setResults([]); }
+    finally { setSearching(false); }
+  }, []);
+
+  const onChangeSearch = (text) => {
+    setSearch(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!text.trim()) { setResults(null); setSearching(false); return; }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => runSearch(text), 300);
+  };
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const goSearch = () => navigation.navigate('MedicineList', { search });
   if (categories === null) return <Loader />;
@@ -35,9 +60,45 @@ export default function PharmacyHomeScreen({ navigation }) {
         <View style={styles.searchBar}>
           <Icon name="search" size={20} color={colors.textMuted} />
           <TextInput style={styles.searchInput} placeholder="Search medicines…" placeholderTextColor={colors.textMuted}
-            value={search} onChangeText={setSearch} returnKeyType="search" onSubmitEditing={goSearch} />
+            value={search} onChangeText={onChangeSearch} returnKeyType="search" onSubmitEditing={goSearch}
+            autoCorrect={false} autoCapitalize="none" />
+          {search.length > 0 ? (
+            <TouchableOpacity onPress={() => onChangeSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Icon name="close" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
+
+      {/* Live search dropdown — shows matching medicines as the user types. */}
+      {search.trim() !== '' ? (
+        <View style={styles.dropdown}>
+          {searching ? (
+            <View style={styles.dropLoading}><ActivityIndicator color={colors.pharmacy} /></View>
+          ) : results && results.length > 0 ? (
+            <>
+              {results.map((m) => (
+                <TouchableOpacity key={m.id} style={styles.dropRow} activeOpacity={0.85}
+                  onPress={() => navigation.navigate('MedicineDetail', { id: m.id })}>
+                  <IconBadge name="pill" color={colors.pharmacy} size={38} iconSize={18} />
+                  <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                    <Text style={styles.dropName} numberOfLines={1}>{m.display_name}</Text>
+                    <Muted style={{ fontSize: font.tiny }} numberOfLines={1}>
+                      {[m.strength, m.form].filter(Boolean).join(' • ')}{m.pharmacy_name ? ` · ${m.pharmacy_name}` : ''}
+                    </Muted>
+                  </View>
+                  <Text style={styles.dropPrice}>₹{Number(m.price).toFixed(0)}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={styles.dropAll} onPress={goSearch}>
+                <Text style={styles.dropAllText}>View all results for “{search.trim()}”</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.dropLoading}><Muted>No medicines found.</Muted></View>
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.sectionRow}>
         <Text style={styles.section}>Shop by category</Text>
@@ -81,6 +142,13 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.white, fontSize: font.h3, fontWeight: font.bold, marginTop: spacing.sm, marginBottom: spacing.lg },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 50 },
   searchInput: { flex: 1, marginLeft: spacing.sm, fontSize: font.body, color: colors.text },
+  dropdown: { backgroundColor: colors.surface, borderRadius: radius.lg, marginTop: spacing.md, overflow: 'hidden', ...shadow.card },
+  dropLoading: { padding: spacing.lg, alignItems: 'center' },
+  dropRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dropName: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  dropPrice: { fontSize: font.body, fontWeight: font.bold, color: colors.pharmacy, marginLeft: spacing.sm },
+  dropAll: { paddingVertical: spacing.md, alignItems: 'center', backgroundColor: colors.pharmacyLight },
+  dropAllText: { color: colors.pharmacy, fontWeight: font.bold, fontSize: font.small },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.md },
   section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
   link: { color: colors.primary, fontWeight: font.semibold },

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert, ActivityIndicator } from 'react-native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
-import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Muted, Row } from '../../components/UI';
+import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Muted, Row, Pill, IconBadge } from '../../components/UI';
 import KycGate from '../../components/KycGate';
 import { colors, spacing, font, BLOOD_GROUPS } from '../../theme';
 
@@ -17,10 +17,14 @@ export default function BecomeDonorScreen({ navigation }) {
   const [health, setHealth] = useState(false);
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);   // fetching existing donor profile
+  const [existingDonor, setExistingDonor] = useState(null);
+  const [showForm, setShowForm] = useState(false);   // set once the user chooses to edit
 
   useEffect(() => {
     BloodApi.myDonor().then((d) => {
       if (d) {
+        setExistingDonor(d);
         setBloodGroup(d.blood_group);
         setCity(d.city);
         setPincode(d.pincode || '');
@@ -28,8 +32,12 @@ export default function BecomeDonorScreen({ navigation }) {
         setAvailable(!!d.is_available);
         setHealth(!!d.health_declaration);
         setConsent(!!d.consent_accepted);
+      } else {
+        // Not a donor yet — go straight to the registration form.
+        setShowForm(true);
       }
-    }).catch(() => {});
+    }).catch(() => { setShowForm(true); })
+      .finally(() => setChecking(false));
   }, []);
 
   const submit = async () => {
@@ -53,6 +61,31 @@ export default function BecomeDonorScreen({ navigation }) {
   };
 
   if (!aadhaarVerified) return <KycGate navigation={navigation} action="register as a blood donor" />;
+
+  if (checking) {
+    return <Screen><View style={styles.centre}><ActivityIndicator color={colors.blood} /></View></Screen>;
+  }
+
+  // Already a donor → show a confirmation screen first; the form only opens when
+  // the user taps "Update your donor profile".
+  if (existingDonor && !showForm) {
+    return (
+      <Screen>
+        <Card style={styles.doneCard}>
+          <IconBadge name="donor" color={colors.blood} size={82} iconSize={40} />
+          <Text style={styles.doneTitle}>You're already a donor</Text>
+          <Pill label={`${existingDonor.blood_group}  •  ${existingDonor.is_available ? 'Available' : 'Unavailable'}`} color={colors.blood} />
+          <Muted style={{ textAlign: 'center', marginTop: spacing.md }}>
+            Thank you for registering as a blood donor. You can update your details or availability anytime.
+          </Muted>
+          <AppButton title="Update your donor profile" color={colors.blood} onPress={() => setShowForm(true)}
+            style={{ marginTop: spacing.xl, alignSelf: 'stretch' }} />
+          <AppButton title="Back to home" variant="ghost" color={colors.blood} onPress={() => navigation.goBack()}
+            style={{ marginTop: spacing.sm, alignSelf: 'stretch' }} />
+        </Card>
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll>
@@ -97,4 +130,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   switchLabel: { fontSize: font.body, color: colors.text, fontWeight: font.medium },
   consent: { alignItems: 'flex-start', marginBottom: spacing.md },
+  centre: { paddingVertical: spacing.xxl, alignItems: 'center' },
+  doneCard: { alignItems: 'center', paddingVertical: spacing.xxl },
+  doneTitle: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, marginVertical: spacing.sm },
 });

@@ -1,9 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, useWindowDimensions } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { colors, radius, font, spacing } from '../theme';
 
 const num = (v) => (v == null || v === '' ? null : Number(v));
+
+// The map sits inside a trip card with buttons below it, so it takes a smaller
+// share of the screen than the patient's full-screen tracking map.
+const HEIGHT_RATIO = 0.34;
+const MIN_HEIGHT = 240;
+const MAX_HEIGHT = 340;
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /**
  * Driver-side trip map: shows the user's pickup point + the driver's own live
@@ -11,7 +19,10 @@ const num = (v) => (v == null || v === '' ? null : Number(v));
  * turn-by-turn directions to the pickup. Renders nothing if the request has no
  * pickup coordinates.
  */
-export default function DriverTripMap({ pickup, address, height = 190 }) {
+export default function DriverTripMap({ pickup, address, height }) {
+  const { height: screenH } = useWindowDimensions();
+  const mapH = height ?? clamp(Math.round(screenH * HEIGHT_RATIO), MIN_HEIGHT, MAX_HEIGHT);
+
   const p = pickup && pickup.lat != null && pickup.lng != null
     ? { latitude: num(pickup.lat), longitude: num(pickup.lng) }
     : null;
@@ -43,7 +54,7 @@ export default function DriverTripMap({ pickup, address, height = 190 }) {
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.mapWrap, { height }]}>
+      <View style={[styles.mapWrap, { height: mapH }]}>
         <MapView
           provider={PROVIDER_GOOGLE}
           style={StyleSheet.absoluteFill}

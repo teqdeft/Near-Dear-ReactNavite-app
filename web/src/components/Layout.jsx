@@ -12,6 +12,7 @@ const NAV = {
     { to: '/admin/aadhaar', label: 'Aadhaar KYC', icon: 'documents' },
     { to: '/admin/users', label: 'Users', icon: 'users' },
     { to: '/admin/blood-requests', label: 'Blood requests', icon: 'blood' },
+    { to: '/admin/donors', label: 'Donors', icon: 'blood' },
     { to: '/admin/ambulance', label: 'Ambulance', icon: 'ambulance' },
     { to: '/admin/orders', label: 'Medicine orders', icon: 'orders' },
     { to: '/admin/support', label: 'Support', icon: 'support' },
@@ -29,7 +30,7 @@ const NAV = {
 
 const TITLES = {
   '/admin': 'Dashboard', '/admin/pharmacies': 'Pharmacy approvals', '/admin/ambulance-vehicles': 'Ambulance Vehicles', '/admin/aadhaar': 'Aadhaar KYC', '/admin/users': 'Users',
-  '/admin/blood-requests': 'Blood requests', '/admin/ambulance': 'Ambulance', '/admin/orders': 'Medicine orders',
+  '/admin/blood-requests': 'Blood requests', '/admin/donors': 'Donors', '/admin/ambulance': 'Ambulance', '/admin/orders': 'Medicine orders',
   '/admin/support': 'Support', '/admin/audit': 'Audit logs', '/admin/notifications': 'Notifications',
   '/pharmacy': 'Dashboard', '/pharmacy/medicines': 'Medicines', '/pharmacy/orders': 'Orders', '/pharmacy/profile': 'Profile & documents',
   '/pharmacy/notifications': 'Notifications',
@@ -42,6 +43,11 @@ export default function Layout() {
   const items = NAV[role] || [];
   const title = TITLES[loc.pathname] || 'NearDear';
   const base = role === 'admin' ? '/admin' : '/pharmacy';
+
+  // Browser-tab title depends on which panel the logged-in user is in.
+  useEffect(() => {
+    document.title = role === 'admin' ? 'Near dear Admin' : 'Pharmacy Panel';
+  }, [role]);
 
   // Mobile navigation drawer. Closed by default; the topbar hamburger opens it,
   // and any navigation or overlay tap closes it again.

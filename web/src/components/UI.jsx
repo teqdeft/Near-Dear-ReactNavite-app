@@ -83,6 +83,24 @@ export function Loader({ text = 'Loading…' }) {
   return <div className="empty">{text}</div>;
 }
 
+// Prev/next pager for list pages backed by a { items, total, page, limit }
+// response. Renders nothing when everything fits on one page.
+export function Pagination({ page, limit, total, onPage }) {
+  const pages = Math.max(1, Math.ceil((total || 0) / (limit || 1)));
+  if (pages <= 1) return null;
+  const from = (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+      <span className="muted">Showing {from}–{to} of {total}</span>
+      <div style={{ flex: 1 }} />
+      <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>‹ Prev</Button>
+      <span className="muted">Page {page} of {pages}</span>
+      <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next ›</Button>
+    </div>
+  );
+}
+
 export function Empty({ icon, title, sub }) {
   return (
     <div className="empty">

@@ -355,17 +355,18 @@ const listOrders = asyncHandler(async (req, res) => {
   const pharmacy = await requireOwnedPharmacy(req);
   const q = db('medicine_orders as o')
     .join('users as u', 'u.id', 'o.user_id')
-    .where('o.pharmacy_id', pharmacy.id)
-    .select('o.*', 'u.name as customer_name', 'u.mobile as customer_mobile');
+    .where('o.pharmacy_id', pharmacy.id);
   if (req.query.status) q.andWhere('o.order_status', req.query.status);
   if (req.query.search) {
     const s = `%${req.query.search}%`;
     q.andWhere((b) => b.whereILike('o.order_number', s).orWhereILike('u.name', s).orWhereILike('u.mobile', s));
   }
-  const limit = Math.min(Number(req.query.limit) || 100, 200);
-  const offset = (Math.max(1, Number(req.query.page) || 1) - 1) * limit;
-  const rows = await q.orderBy('o.id', 'desc').limit(limit).offset(offset);
-  return ok(res, rows);
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const rows = await q.clone().select('o.*', 'u.name as customer_name', 'u.mobile as customer_mobile')
+    .orderBy('o.id', 'desc').limit(limit).offset((page - 1) * limit);
+  const total = Number((await q.clone().count('o.id as c').first()).c);
+  return ok(res, { items: rows, total, page, limit });
 });
 
 // GET /pharmacy/sales  — revenue summary + 7-day trend + top medicines + low stock

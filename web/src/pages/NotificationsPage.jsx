@@ -29,9 +29,15 @@ function destinationFor(n, base) {
       return base === '/admin' ? '/admin/ambulance' : null;
     case 'support':
       return base === '/admin' ? '/admin/support' : null;
-    case 'admin':
-      // New pharmacy/ambulance registrations for the admin to review.
-      return base === '/admin' ? '/admin/pharmacies' : null;
+    case 'admin': {
+      // 'admin' covers several review queues (pharmacy / ambulance / Aadhaar
+      // registrations) — route by what the notification is about, not a default.
+      if (base !== '/admin') return null;
+      const text = `${n.title || ''} ${n.message || ''}`.toLowerCase();
+      if (text.includes('ambulance') || text.includes('vehicle')) return '/admin/ambulance-vehicles';
+      if (text.includes('aadhaar') || text.includes('kyc')) return '/admin/aadhaar';
+      return '/admin/pharmacies';
+    }
     default:
       return null;
   }

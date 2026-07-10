@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AdminApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
@@ -7,7 +8,8 @@ import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../com
 const FILTERS = ['', 'pending', 'approved', 'rejected', 'suspended'];
 
 export default function AdminPharmacies() {
-  const [filter, setFilter] = useState('');
+  const [params] = useSearchParams();
+  const [filter, setFilter] = useState(params.get('status') || '');
   const { data, loading, error, reload } = useAsync(() => AdminApi.pharmacies(filter), [filter]);
   const [detailId, setDetailId] = useState(null);
 

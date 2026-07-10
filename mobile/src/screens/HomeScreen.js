@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../store/AuthContext';
 import { useNotifications } from '../store/NotificationContext';
 import Icon from '../components/Icon';
 import ProfileAvatar from '../components/ProfileAvatar';
+import ProfilePreviewModal from '../components/ProfilePreviewModal';
 import GradientBackground from '../components/GradientBackground';
 import { colors, spacing, font, radius, shadow } from '../theme';
 
@@ -28,42 +29,18 @@ function VerifyNowPill({ onPress }) {
   return (
     <Animated.View style={{ transform: [{ scale }], opacity }}>
       <TouchableOpacity style={[styles.statusPill, styles.unverifiedPill]} onPress={onPress}>
-        <Icon name="shield-alert-outline" size={16} color={colors.warning} />
+        <Icon name="shield-alert-outline" size={13} color={colors.warning} />
         <Text style={styles.unverifiedText}>Verify now</Text>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-function NotificationBell({ badge, onPress }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!badge) { pulse.setValue(0); return undefined; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 800, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [badge, pulse]);
-
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
-
+function NotificationBell({ hasUnread, onPress }) {
   return (
     <TouchableOpacity style={styles.bell} onPress={onPress} activeOpacity={0.85}>
       <Icon name="bell" size={20} color={colors.text} />
-      {badge ? (
-        <View pointerEvents="none">
-          <Animated.View style={[styles.bellPulse, { opacity: ringOpacity, transform: [{ scale }] }]} />
-          <View style={styles.bellBadge}>
-            <Text style={styles.bellBadgeText}>{badge}</Text>
-          </View>
-        </View>
-      ) : null}
+      {hasUnread ? <View style={styles.bellDot} pointerEvents="none" /> : null}
     </TouchableOpacity>
   );
 }
@@ -89,34 +66,42 @@ const QUICK = [
 ];
 
 export default function HomeScreen({ navigation }) {
-  const { user, profile, aadhaarVerified } = useAuth();
-  const { unread } = useNotifications();
+  const { user, profile, aadhaarVerified, refreshUser } = useAuth();
+  const { unread, refresh: refreshNotifications } = useNotifications();
   const firstName = (user?.name || 'there').split(' ')[0];
-  const badge = unread > 0 ? (unread > 99 ? '99+' : String(unread)) : null;
+  const [preview, setPreview] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   // KYC is pending while a manual Aadhaar submission is awaiting admin review.
   const aadhaarPending = user?.aadhaar_kyc_status === 'pending';
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await Promise.all([refreshUser(), refreshNotifications()]); } catch (e) { /* ignore */ }
+    finally { setRefreshing(false); }
+  };
 
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
           {/* Top row - Profile, Verify Badge, and Bell */}
           <View style={styles.topRow}>
             <View style={styles.profileSection}>
               {/* Profile Avatar */}
-              <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Profile')} style={styles.avatarWrap}>
+              <TouchableOpacity activeOpacity={0.85} onPress={() => setPreview(true)} style={styles.avatarWrap}>
                 <ProfileAvatar path={profile?.profile_image} name={user?.name} size={78} />
               </TouchableOpacity>
               
               {/* Verified / Under review / Verify now badge */}
               {aadhaarVerified ? (
                 <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
-                  <Icon name="check-decagram" size={16} color={colors.white} />
+                  <Icon name="check-decagram" size={13} color={colors.white} />
                   <Text style={styles.verifiedText}>Verified</Text>
                 </View>
               ) : aadhaarPending ? (
                 <TouchableOpacity style={[styles.statusPill, styles.reviewPill]} onPress={() => navigation.navigate('AadhaarUpload')}>
-                  <Icon name="clock" size={16} color={colors.warning} />
+                  <Icon name="clock" size={13} color={colors.warning} />
                   <Text style={styles.reviewText}>Under review</Text>
                 </TouchableOpacity>
               ) : (
@@ -124,7 +109,7 @@ export default function HomeScreen({ navigation }) {
               )}
             </View>
             
-            <NotificationBell badge={badge} onPress={() => navigation.navigate('Alerts')} />
+            <NotificationBell hasUnread={unread > 0} onPress={() => navigation.navigate('Alerts')} />
           </View>
 
           {/* Greeting */}
@@ -197,6 +182,13 @@ export default function HomeScreen({ navigation }) {
             ))}
           </View>
         </ScrollView>
+
+        <ProfilePreviewModal
+          visible={preview}
+          onClose={() => setPreview(false)}
+          path={profile?.profile_image}
+          name={user?.name}
+        />
       </SafeAreaView>
     </GradientBackground>
   );
@@ -205,22 +197,16 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
   profileSection: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, ...shadow.soft },
-  verifiedText: { marginLeft: 6, color: colors.white, fontWeight: font.bold, fontSize: font.small },
+  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radius.pill, ...shadow.soft },
+  verifiedText: { marginLeft: 4, color: colors.white, fontWeight: font.bold, fontSize: font.tiny },
   unverifiedPill: { backgroundColor: colors.white, borderWidth: 1, borderColor: '#F6E3B8' },
-  unverifiedText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
+  unverifiedText: { marginLeft: 4, color: '#8A6300', fontWeight: font.bold, fontSize: font.tiny },
   reviewPill: { backgroundColor: '#FFF4E0', borderWidth: 1, borderColor: '#F6E3B8' },
-  reviewText: { marginLeft: 6, color: '#8A6300', fontWeight: font.bold, fontSize: font.small },
+  reviewText: { marginLeft: 4, color: '#8A6300', fontWeight: font.bold, fontSize: font.tiny },
   bell: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow.soft },
-  bellBadge: {
-    position: 'absolute', top: -16, right: -14, minWidth: 18, height: 18, borderRadius: 9,
-    backgroundColor: colors.blood, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 4, borderWidth: 2, borderColor: colors.white,
-  },
-  bellBadgeText: { color: colors.white, fontSize: 10, fontWeight: font.bold, textAlign: 'center', includeFontPadding: false },
-  bellPulse: {
-    position: 'absolute', top: -16, right: -14, width: 18, height: 18, borderRadius: 9,
-    backgroundColor: colors.blood,
+  bellDot: {
+    position: 'absolute', top: -2, right: -2, width: 11, height: 11, borderRadius: 6,
+    backgroundColor: colors.blood, borderWidth: 2, borderColor: colors.white,
   },
 
   greetRow: { flexDirection: 'row', alignItems: 'flex-start' },

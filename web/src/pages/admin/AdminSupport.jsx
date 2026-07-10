@@ -1,13 +1,17 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, ErrorState } from '../../components/UI';
 
 const NEXT = { open: 'in_progress', in_progress: 'resolved', resolved: 'closed' };
+const FILTERS = ['', 'open', 'in_progress', 'resolved', 'closed'];
 
 export default function AdminSupport() {
-  const { data, loading, error, reload } = useAsync(() => AdminApi.tickets());
+  const [params] = useSearchParams();
+  const [filter, setFilter] = useState(params.get('status') || '');
+  const { data, loading, error, reload } = useAsync(() => AdminApi.tickets(filter), [filter]);
   const [busyId, setBusyId] = useState(null);
 
   const advance = async (t) => {
@@ -19,12 +23,20 @@ export default function AdminSupport() {
     finally { setBusyId(null); }
   };
 
-  if (loading) return <Loader />;
-  if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
 
   return (
-    <div className="card" style={{ padding: 0 }}>
+    <>
+      <div className="toolbar">
+        {FILTERS.map((f) => (
+          <span key={f || 'all'} className={'tab' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
+            {f ? f[0].toUpperCase() + f.slice(1).replace('_', ' ') : 'All'}
+          </span>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 0 }}>
+        {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
       <table className="table">
         <thead><tr><th>Subject</th><th>From</th><th>Topic</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -47,6 +59,8 @@ export default function AdminSupport() {
           ))}
         </tbody>
       </table>
-    </div>
+        )}
+      </div>
+    </>
   );
 }

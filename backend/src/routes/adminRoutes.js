@@ -26,6 +26,7 @@ router.put('/aadhaar/:id/review', c.reviewAadhaarSubmission);
 // Blood requests
 router.get('/blood-requests', c.listBloodRequests);
 router.put('/blood-requests/:id/status', c.setBloodRequestStatus);
+router.get('/blood-donors', c.listDonors);
 
 // Ambulance
 router.get('/ambulance-requests', c.listAmbulanceRequests);

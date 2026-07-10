@@ -30,7 +30,9 @@ const dashboard = asyncHandler(async (req, res) => {
     // Every registered app user except admins (donors, pharmacy owners and
     // drivers are all users who happen to have taken on a role).
     db('users').whereNot('role', ROLES.ADMIN).count('* as c').first().then((r) => Number(r.c)),
-    count('donor_profiles'),
+    // Donors whose account still exists (exclude deleted users' leftover profiles).
+    db('donor_profiles as d').join('users as u', 'u.id', 'd.user_id')
+      .whereNot('u.status', USER_STATUS.DELETED).count('* as c').first().then((r) => Number(r.c)),
     count('blood_requests', { status: 'open' }),
     count('blood_requests', { status: 'matched' }),
     count('pharmacies', { approval_status: PHARMACY_APPROVAL.PENDING }),
@@ -315,6 +317,25 @@ const setBloodRequestStatus = asyncHandler(async (req, res) => {
   return ok(res, { status }, 'Updated');
 });
 
+// ---- Blood donors -----------------------------------------------------
+// GET /admin/blood-donors?available=true  — registered donors (optionally only
+// the ones currently available to donate), so the dashboard "Donors" tile can
+// drill into who's an active donor right now.
+const listDonors = asyncHandler(async (req, res) => {
+  const q = db('donor_profiles as d')
+    .join('users as u', 'u.id', 'd.user_id')
+    // Deleted accounts are no longer real users — never list them as donors.
+    .whereNot('u.status', USER_STATUS.DELETED)
+    .select('d.id', 'd.user_id', 'u.name', 'u.mobile', 'd.blood_group', 'd.city',
+      'd.is_available', 'd.status', 'd.last_donation_date', 'd.created_at');
+  // "Active" = a live (non-blocked) account that is available and an active donor.
+  if (req.query.available === 'true') {
+    q.andWhere('u.status', USER_STATUS.ACTIVE).andWhere('d.is_available', true).andWhere('d.status', 'active');
+  }
+  const rows = await q.orderBy('d.id', 'desc').limit(300);
+  return ok(res, rows);
+});
+
 // ---- Ambulance --------------------------------------------------------
 const listAmbulanceRequests = asyncHandler(async (req, res) => {
   const q = db('ambulance_requests');
@@ -447,11 +468,16 @@ const setMedicineStatus = asyncHandler(async (req, res) => {
 
 // ---- Orders -----------------------------------------------------------
 const listOrders = asyncHandler(async (req, res) => {
-  const q = db('medicine_orders as o').leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id').select('o.*', 'ph.pharmacy_name');
+  // Paginated — the order list grows unbounded, so never return it all at once.
+  const q = db('medicine_orders as o').leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id');
   if (req.query.status) q.andWhere('o.order_status', req.query.status);
   if (req.query.pharmacy_id) q.andWhere('o.pharmacy_id', req.query.pharmacy_id);
-  const rows = await q.orderBy('o.id', 'desc').limit(200);
-  return ok(res, rows);
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const rows = await q.clone().select('o.*', 'ph.pharmacy_name')
+    .orderBy('o.id', 'desc').limit(limit).offset((page - 1) * limit);
+  const total = Number((await q.clone().count('o.id as c').first()).c);
+  return ok(res, { items: rows, total, page, limit });
 });
 
 // ---- Support ----------------------------------------------------------
@@ -480,7 +506,7 @@ module.exports = {
   listPharmacies, pharmacyDetail, reviewPharmacy,
   listAmbulanceVehicles, ambulanceVehicleDetail, reviewAmbulanceVehicle,
   listAadhaarSubmissions, aadhaarSubmissionDetail, reviewAadhaarSubmission,
-  listBloodRequests, setBloodRequestStatus,
+  listBloodRequests, setBloodRequestStatus, listDonors,
   listAmbulanceRequests, assignAmbulance, addProvider, addAmbulance, listAmbulances,
   createDriver, listDrivers,
   addCategory, addMasterMedicine, setMedicineStatus,
