@@ -6,6 +6,8 @@ import { AmbulanceApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import useDriverLocationTracker from '../../hooks/useDriverLocationTracker';
+import useDutyLocationPing from '../../hooks/useDutyLocationPing';
+import DutyToggleCard from '../../components/DutyToggleCard';
 import DriverTripMap from '../../components/DriverTripMap';
 import ProfileAvatar from '../../components/ProfileAvatar';
 import ProfilePreviewModal from '../../components/ProfilePreviewModal';
@@ -29,19 +31,39 @@ export default function DriverDashboardScreen({ navigation }) {
   const [vehicle, setVehicle] = useState(undefined); // undefined=loading, null=none, obj={vehicle,documents}
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [onDuty, setOnDuty] = useState(false);
+  const [dutyBusy, setDutyBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [av, my, veh] = await Promise.all([
+      const [av, my, veh, duty] = await Promise.all([
         AmbulanceApi.driverAvailable(),
         AmbulanceApi.driverRequests(),
         AmbulanceApi.myVehicle().catch(() => null),
+        AmbulanceApi.duty().catch(() => null),
       ]);
       setAvailable(av || []);
       setMine(my || []);
       setVehicle(veh);
+      setOnDuty(!!duty?.is_on_duty);
     } catch (e) { setAvailable([]); }
   }, []);
+
+  // Going on duty starts sharing the driver's location, which is what lets a
+  // request reach them when it is close by but in a town they never listed.
+  const toggleDuty = async (next) => {
+    setDutyBusy(true);
+    setOnDuty(next); // optimistic: the switch must feel instant
+    try {
+      await AmbulanceApi.setDuty(next);
+      await load(); // the available list changes with duty — refetch it
+    } catch (e) {
+      setOnDuty(!next); // roll back rather than lie about the driver's state
+      Alert.alert('Could not change duty status', errMessage(e));
+    } finally {
+      setDutyBusy(false);
+    }
+  };
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
@@ -87,6 +109,9 @@ export default function DriverDashboardScreen({ navigation }) {
   // Auto-share GPS while a trip is moving (on the way / picked up).
   const trackingTrip = mine.find((m) => ['on_the_way', 'picked_up'].includes(m.status));
   useDriverLocationTracker(trackingTrip?.id, !!trackingTrip);
+
+  // And while on duty, so requests near this driver find them at all.
+  useDutyLocationPing(onDuty);
 
   if (available === null) return <Loader />;
   if (!aadhaarVerified) return <KycGate navigation={navigation} action="accept ambulance rides" accent={colors.ambulance} />;
@@ -135,10 +160,6 @@ export default function DriverDashboardScreen({ navigation }) {
             ) : null}
           </View>
 
-          <View style={styles.online}>
-            <Icon name="online" size={10} color={colors.success} />
-            <Text style={styles.onlineText}> Online</Text>
-          </View>
         </View>
 
         <View style={styles.header}>
@@ -147,6 +168,18 @@ export default function DriverDashboardScreen({ navigation }) {
             <Text style={styles.role}>Ambulance Driver</Text>
           </View>
         </View>
+
+        {/* Replaces a hardcoded "Online" pill that said Online no matter what.
+            This one is the real switch, and it is what decides whether a call in
+            the next town can reach this driver — so it gets the room to say so. */}
+        <DutyToggleCard
+          onDuty={onDuty}
+          busy={dutyBusy}
+          onChange={toggleDuty}
+          // Naming the driver's own cities makes the off-duty state unambiguous:
+          // "calls from Mohali and Kharar" instead of a vague "your cities".
+          cities={profile?.city}
+        />
 
         {activeTrips.length > 0 && (
           <>
@@ -190,7 +223,17 @@ export default function DriverDashboardScreen({ navigation }) {
               </Row>
               <Row style={{ marginTop: 8 }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.pickup_address}</Muted></Row>
               <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.drop_address}</Muted></Row>
-              {r.city ? <Row style={{ marginTop: 2 }}><Icon name="pin" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 4 }}>{r.city}</Muted></Row> : null}
+              {r.city || r.distance_km != null ? (
+                <Row style={{ marginTop: 2 }}>
+                  <Icon name="pin" size={15} color={colors.textMuted} />
+                  <Muted style={{ marginLeft: 4 }}>
+                    {r.city || ''}
+                    {/* null unless the driver is on duty AND the pickup was pinned —
+                        never a made-up zero. */}
+                    {r.distance_km != null ? `${r.city ? ' • ' : ''}${r.distance_km} km away` : ''}
+                  </Muted>
+                </Row>
+              ) : null}
               <AppButton title="Accept request" color={colors.ambulance} loading={busyId === r.id} disabled={!!busyId} style={{ marginTop: spacing.md }} onPress={() => accept(r)} />
             </Card>
           ))
@@ -217,8 +260,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   hello: { fontSize: font.h2, fontWeight: font.bold, color: colors.text },
   role: { color: colors.textMuted, fontSize: font.small, marginTop: 2 },
-  online: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.pharmacyLight, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill },
-  onlineText: { color: colors.success, fontWeight: font.bold, fontSize: font.small },
   section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginTop: spacing.md, marginBottom: spacing.md },
   activeCard: { borderLeftWidth: 4, borderLeftColor: colors.ambulance, marginBottom: spacing.md },
   reqCard: { marginBottom: spacing.md },

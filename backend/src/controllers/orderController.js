@@ -4,6 +4,7 @@ const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
+const { servesTarget } = require('../utils/serviceArea');
 const {
   ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, PHARMACY_APPROVAL,
   ACTIVE_STATUS, STOCK_STATUS, NOTIFICATION_TYPE,
@@ -95,6 +96,12 @@ const placeOrder = asyncHandler(async (req, res) => {
   if (delivery_address_id) {
     const addr = await db('user_addresses').where({ id: delivery_address_id, user_id: userId }).first();
     if (!addr) throw ApiError.badRequest('Delivery address not found');
+    // The pharmacy must actually reach this address — the same rule the catalog
+    // used to decide what to show. Without this a client could order from any
+    // pharmacy id, including one in another state.
+    if (!servesTarget(addr, pharmacy)) {
+      throw ApiError.badRequest('This pharmacy does not deliver to the selected address.');
+    }
     orderCity = addr.city;
   } else {
     // No delivery address on this order (e.g. pickup) — fall back to the

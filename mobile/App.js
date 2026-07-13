@@ -6,6 +6,7 @@ import { enableScreens } from 'react-native-screens';
 import { AuthProvider } from './src/store/AuthContext';
 import { NotificationProvider } from './src/store/NotificationContext';
 import { CartProvider } from './src/store/CartContext';
+import { DeliveryProvider } from './src/store/DeliveryContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
 
@@ -32,9 +33,12 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <CartProvider>
-            <NavigationContainer theme={navTheme}>
-              <RootNavigator />
-            </NavigationContainer>
+            {/* Inside AuthProvider: the delivery address list is per-user. */}
+            <DeliveryProvider>
+              <NavigationContainer theme={navTheme}>
+                <RootNavigator />
+              </NavigationContainer>
+            </DeliveryProvider>
           </CartProvider>
         </NotificationProvider>
       </AuthProvider>

@@ -8,6 +8,7 @@ import { errMessage } from '../../api/client';
 import { Card, Pill, Muted, Row, AppButton, TextField, ListRow } from '../../components/UI';
 import Icon from '../../components/Icon';
 import ProfileAvatar from '../../components/ProfileAvatar';
+import CityChipsInput from '../../components/CityChipsInput';
 import { colors, spacing, font, radius } from '../../theme';
 
 export default function ProfileScreen({ navigation }) {
@@ -103,7 +104,12 @@ export default function ProfileScreen({ navigation }) {
         {editing ? (
           <Card style={{ marginBottom: spacing.lg }}>
             <TextField label="Name" leftIcon="user" value={name} onChangeText={setName} />
-            <TextField label="City" leftIcon="location" value={city} onChangeText={setCity} />
+            {isDriver ? (
+              // A driver covers an area, not a single city — let them list each one.
+              <CityChipsInput label="Service cities" value={city} onChange={setCity} color={colors.ambulance} />
+            ) : (
+              <TextField label="City" leftIcon="location" value={city} onChangeText={setCity} />
+            )}
             <Row>
               <AppButton title="Save" color={isDriver ? colors.ambulance : colors.primary} loading={saving} onPress={save} style={{ flex: 1, marginRight: spacing.sm }} />
               <AppButton title="Cancel" variant="outline" color={isDriver ? colors.ambulance : colors.primary} onPress={() => setEditing(false)} style={{ flex: 1 }} />

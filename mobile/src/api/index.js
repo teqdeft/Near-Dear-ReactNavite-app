@@ -49,7 +49,9 @@ export const BloodApi = {
 };
 
 export const AmbulanceApi = {
-  createRequest: (payload) => data(client.post('/ambulance/requests', payload)),
+  // full(), not data(): the caller shows the server's own message, which tells
+  // the user whether any driver was actually reachable. data() would drop it.
+  createRequest: (payload) => full(client.post('/ambulance/requests', payload)),
   myRequests: () => data(client.get('/ambulance/requests/mine')),
   requestDetail: (id) => data(client.get(`/ambulance/requests/${id}`)),
   cancelRequest: (id) => full(client.post(`/ambulance/requests/${id}/cancel`)),
@@ -59,6 +61,11 @@ export const AmbulanceApi = {
   accept: (id) => data(client.post(`/ambulance/requests/${id}/accept`)),
   release: (id) => data(client.post(`/ambulance/requests/${id}/release`)),
   updateStatus: (id, status) => data(client.put(`/ambulance/requests/${id}/status`, { status })),
+  // On duty: the driver shares their location so requests near them (even in a
+  // town they never listed) can reach them.
+  duty: () => data(client.get('/ambulance/driver/duty')),
+  setDuty: (onDuty) => data(client.put('/ambulance/driver/duty', { on_duty: onDuty })),
+  ping: (coord) => data(client.post('/ambulance/driver/ping', coord)),
   // Live tracking
   track: (id) => data(client.get(`/ambulance/requests/${id}/track`)),
   updateLocation: (payload) => full(client.post('/ambulance/driver/location', payload)),

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
-import { ProfileApi, OrderApi } from '../../api';
+import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
+import { useDelivery } from '../../store/DeliveryContext';
 import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle } from '../../components/UI';
+import LocationPicker from '../../components/LocationPicker';
+import CityPicker from '../../components/CityPicker';
 import Icon from '../../components/Icon';
+import { cityCoords } from '../../constants/cities';
 import { colors, spacing, font, radius } from '../../theme';
 
 const PAYMENTS = [
@@ -13,39 +17,34 @@ const PAYMENTS = [
   { key: 'upi_manual', label: 'UPI (pay to pharmacy)', icon: 'cellphone' },
 ];
 
+const EMPTY_ADDR = { name: 'Home', address_line_1: '', city: '', pincode: '', latitude: null, longitude: null };
+
 export default function CheckoutScreen({ navigation }) {
   const { items, pharmacyId, subtotal, needsPrescription, clear } = useCart();
-  const [addresses, setAddresses] = useState([]);
-  const [addressId, setAddressId] = useState(null);
+  // Shared with the catalog on purpose: the backend only lets you order from a
+  // pharmacy that reaches the delivery address, so if this screen had its own
+  // address the user could be refused at checkout for a cart the catalog had
+  // just told them was fine.
+  const { addresses, addressId, setAddressId, add: addAddress } = useDelivery();
   const [adding, setAdding] = useState(false);
-  const [newAddr, setNewAddr] = useState({ name: 'Home', address_line_1: '', city: '', pincode: '' });
+  const [newAddr, setNewAddr] = useState(EMPTY_ADDR);
   const [payment, setPayment] = useState('cod');
   const [prescriptions, setPrescriptions] = useState([]);
   const [prescriptionId, setPrescriptionId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [placing, setPlacing] = useState(false);
 
-  const loadAddresses = useCallback(async () => {
-    try {
-      const list = (await ProfileApi.addresses()) || [];
-      setAddresses(list);
-      const def = list.find((a) => a.is_default) || list[0];
-      if (def) setAddressId(def.id);
-    } catch (e) { /* ignore */ }
-  }, []);
-
   const loadPrescriptions = useCallback(async () => {
     try { setPrescriptions((await OrderApi.myPrescriptions()) || []); } catch (e) { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadAddresses(); if (needsPrescription) loadPrescriptions(); }, [loadAddresses, loadPrescriptions, needsPrescription]);
+  useEffect(() => { if (needsPrescription) loadPrescriptions(); }, [loadPrescriptions, needsPrescription]);
 
   const saveNewAddress = async () => {
     if (!newAddr.address_line_1 || !newAddr.city) return Alert.alert('Address', 'Please enter address and city.');
     try {
-      const created = await ProfileApi.addAddress({ ...newAddr, address_type: 'home', is_default: addresses.length === 0 });
-      setAddresses((a) => [created, ...a]);
-      setAddressId(created.id);
+      await addAddress({ ...newAddr, address_type: 'home', is_default: addresses.length === 0 });
+      setNewAddr(EMPTY_ADDR);
       setAdding(false);
     } catch (e) { Alert.alert('Error', errMessage(e)); }
   };
@@ -117,10 +116,36 @@ export default function CheckoutScreen({ navigation }) {
         <Card style={{ marginTop: spacing.sm }}>
           <TextField label="Label" value={newAddr.name} onChangeText={(v) => setNewAddr((n) => ({ ...n, name: v }))} />
           <TextField label="Address *" value={newAddr.address_line_1} onChangeText={(v) => setNewAddr((n) => ({ ...n, address_line_1: v }))} multiline />
-          <Row>
-            <TextField style={{ flex: 1, marginRight: spacing.sm }} label="City *" value={newAddr.city} onChangeText={(v) => setNewAddr((n) => ({ ...n, city: v }))} />
-            <TextField style={{ flex: 1 }} label="Pincode" keyboardType="number-pad" value={newAddr.pincode} onChangeText={(v) => setNewAddr((n) => ({ ...n, pincode: v }))} />
-          </Row>
+          <CityPicker
+            label="City *"
+            value={newAddr.city}
+            // Changing the city invalidates any pin already dropped — see DeliverToBar.
+            onChange={(v) => setNewAddr((n) => ({ ...n, city: v, latitude: null, longitude: null }))}
+            color={colors.pharmacy}
+            hint="Pick your city and the map below jumps there."
+          />
+          <TextField label="Pincode" keyboardType="number-pad" maxLength={6}
+            value={newAddr.pincode} onChangeText={(v) => setNewAddr((n) => ({ ...n, pincode: v }))} />
+
+          {/* No coordinates for this town -> no map to show. The pin stays null and
+              pharmacies are matched on the city name instead of distance. */}
+          {cityCoords(newAddr.city) ? (
+            // autoLocate off, city-centred instead — see DeliverToBar: the phone's
+            // position is not the delivery point when ordering for another city.
+            <LocationPicker
+              autoLocate={false}
+              center={cityCoords(newAddr.city)}
+              label="Move the map so the pin is on the delivery point"
+              value={newAddr.latitude != null ? { latitude: newAddr.latitude, longitude: newAddr.longitude } : null}
+              onChange={(c) => setNewAddr((n) => ({ ...n, latitude: c.latitude, longitude: c.longitude }))}
+            />
+          ) : newAddr.city.trim() ? (
+            <Muted style={{ marginBottom: spacing.md }}>
+              We don’t have {newAddr.city.trim()} on our map yet, so there’s nothing to pin.
+              Your address still works — we’ll find pharmacies in {newAddr.city.trim()} by name.
+            </Muted>
+          ) : null}
+
           <AppButton title="Save address" color={colors.pharmacy} onPress={saveNewAddress} />
         </Card>
       ) : (

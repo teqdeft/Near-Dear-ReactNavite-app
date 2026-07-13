@@ -15,6 +15,7 @@ export const AuthApi = {
 export const PharmacyApi = {
   me: () => data(client.get('/pharmacy/me')),
   register: (payload) => data(client.post('/pharmacy/register', payload)),
+  updateMe: (payload) => data(client.put('/pharmacy/me', payload)),
   uploadDocument: (formData) =>
     data(client.post('/pharmacy/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
   dashboard: () => data(client.get('/pharmacy/dashboard')),

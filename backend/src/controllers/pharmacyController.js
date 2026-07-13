@@ -8,6 +8,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { UPLOAD_ROOT } = require('../middleware/upload');
 const { renameUpload } = require('../utils/fileNaming');
+const { toCoord } = require('../utils/geo');
 const {
   ROLES, PHARMACY_APPROVAL, DOC_TYPE, DOC_STATUS, ORDER_STATUS,
   PRESCRIPTION_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, MEDICINE_FORM,
@@ -44,6 +45,23 @@ function validatePricing(b) {
   }
 }
 
+/**
+ * The pinned shop location, or nulls if it wasn't pinned.
+ *
+ * These coordinates decide which customers ever see this pharmacy (see
+ * utils/serviceArea), so a junk pair is worse than none: (0, 0) — what an empty
+ * map form posts — would place the shop in the Atlantic and hide it from
+ * everyone. Reject anything not a real point and store NULL, which falls back to
+ * city matching.
+ */
+function coordsFrom(b) {
+  const coord = toCoord(b.latitude, b.longitude);
+  if (!coord && (b.latitude != null || b.longitude != null)) {
+    throw ApiError.badRequest('The pinned location is not a valid point on the map.');
+  }
+  return { latitude: coord ? coord.lat : null, longitude: coord ? coord.lng : null };
+}
+
 // POST /pharmacy/register
 const register = asyncHandler(async (req, res) => {
   const existing = await ownedPharmacy(req.user.id);
@@ -62,8 +80,7 @@ const register = asyncHandler(async (req, res) => {
     city: b.city,
     state: b.state,
     pincode: b.pincode,
-    latitude: b.latitude,
-    longitude: b.longitude,
+    ...coordsFrom(b),
     approval_status: PHARMACY_APPROVAL.PENDING,
   });
 
@@ -91,6 +108,36 @@ const myPharmacy = asyncHandler(async (req, res) => {
   if (!pharmacy) return ok(res, null);
   const documents = await db('pharmacy_documents').where({ pharmacy_id: pharmacy.id });
   return ok(res, { pharmacy, documents });
+});
+
+/**
+ * PUT /pharmacy/me — edit the shop's details, above all its pinned location.
+ *
+ * Deliberately cannot touch license_number / gst_number / approval_status: those
+ * are what the admin approved against the uploaded documents, so changing them
+ * here would let an approved pharmacy swap in a different licence without any
+ * re-review. Those need a fresh document upload, which already resets approval.
+ */
+const EDITABLE_FIELDS = ['pharmacy_name', 'owner_name', 'mobile', 'email',
+  'address', 'city', 'state', 'pincode'];
+
+const updateMyPharmacy = asyncHandler(async (req, res) => {
+  const pharmacy = await requireOwnedPharmacy(req);
+  const b = req.body;
+
+  const patch = Object.fromEntries(
+    EDITABLE_FIELDS.filter((f) => b[f] !== undefined).map((f) => [f, b[f]])
+  );
+  // Only touch the coordinates when the client actually sent them, so a form
+  // that omits the map doesn't silently wipe an existing pin.
+  if (b.latitude !== undefined || b.longitude !== undefined) {
+    Object.assign(patch, coordsFrom(b));
+  }
+  if (!Object.keys(patch).length) throw ApiError.badRequest('Nothing to update');
+
+  await db('pharmacies').where({ id: pharmacy.id }).update(patch);
+  const updated = await db('pharmacies').where({ id: pharmacy.id }).first();
+  return ok(res, updated, 'Pharmacy details updated');
 });
 
 // POST /pharmacy/documents  (multipart: file + document_type)
@@ -509,7 +556,7 @@ const reviewPrescription = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  register, myPharmacy, uploadDocument, dashboard,
+  register, myPharmacy, updateMyPharmacy, uploadDocument, dashboard,
   listMyMedicines, addMedicine, updateMedicine, deleteMedicine, addCategory,
   listOrders, orderDetail, updateOrderStatus, reviewPrescription, salesSummary,
 };

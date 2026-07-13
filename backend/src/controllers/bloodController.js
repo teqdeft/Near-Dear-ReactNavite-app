@@ -5,7 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const { requireKyc } = require('../utils/requireKyc');
-const { citiesMatch, cityMatchRaw } = require('../utils/cityMatch');
+const { citiesOverlap, cityOverlapRaw, normalizeCityList } = require('../utils/cityMatch');
 const {
   ROLES, USER_STATUS, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
 } = require('../constants/enums');
@@ -21,8 +21,11 @@ async function matchOpenRequestsToDonor(donor) {
   if (!donor || !donor.blood_group || !donor.city) return 0;
   if (!donor.is_available || donor.status !== DONOR_STATUS.ACTIVE) return 0;
 
-  const donorCity = cityMatchRaw('city', donor.city);
-  const requests = await db('blood_requests')
+  // A donor can list several cities they can reach ("Mohali, Kharar"), so match
+  // on any shared city. The SQL clause is a recall-safe prefilter; citiesOverlap
+  // makes the real, whole-token decision.
+  const donorCity = cityOverlapRaw('city', donor.city);
+  const candidates = await db('blood_requests')
     .where({ blood_group_required: donor.blood_group })
     .whereIn('status', ACTIVE_REQUEST_STATUSES)
     .whereRaw(donorCity.clause, donorCity.bindings)
@@ -32,6 +35,7 @@ async function matchOpenRequestsToDonor(donor) {
         .whereRaw('m.blood_request_id = blood_requests.id')
         .andWhere('m.donor_user_id', donor.user_id);
     });
+  const requests = candidates.filter((r) => citiesOverlap(donor.city, r.city));
 
   if (requests.length === 0) return 0;
 
@@ -125,7 +129,7 @@ const becomeDonor = asyncHandler(async (req, res) => {
 
   const existing = await db('donor_profiles').where({ user_id: userId }).first();
   const payload = {
-    blood_group, city, pincode, latitude, longitude, last_donation_date,
+    blood_group, city: normalizeCityList(city), pincode, latitude, longitude, last_donation_date,
     is_available: Boolean(is_available), can_receive_alerts: Boolean(can_receive_alerts),
     health_declaration: Boolean(health_declaration), consent_accepted: Boolean(consent_accepted),
     status: DONOR_STATUS.ACTIVE,
@@ -145,7 +149,7 @@ const becomeDonor = asyncHandler(async (req, res) => {
         .andWhere('m.response_status', MATCH_RESPONSE.PENDING)
         .select('m.id', 'r.blood_group_required', 'r.city');
       const staleIds = pending
-        .filter((m) => m.blood_group_required !== payload.blood_group || !citiesMatch(payload.city, m.city))
+        .filter((m) => m.blood_group_required !== payload.blood_group || !citiesOverlap(payload.city, m.city))
         .map((m) => m.id);
       if (staleIds.length) await db('blood_request_matches').whereIn('id', staleIds).del();
     }
@@ -223,16 +227,18 @@ const createRequest = asyncHandler(async (req, res) => {
     status: BLOOD_REQUEST_STATUS.OPEN,
   });
 
-  // Matching: available donors, same blood group, overlapping city (handles
-  // adjacent/combined cities like "Chandigarh mohali"), excluding the requester.
-  const reqCity = cityMatchRaw('city', b.city);
-  const donors = await db('donor_profiles')
+  // Matching: available donors, same blood group, overlapping city — a donor
+  // lists every city they can reach ("Mohali, Kharar"), so a request in any one
+  // of them reaches them. Excludes the requester.
+  const reqCity = cityOverlapRaw('city', b.city);
+  const candidates = await db('donor_profiles')
     .where({ blood_group: b.blood_group_required, is_available: true, status: DONOR_STATUS.ACTIVE })
     .whereRaw(reqCity.clause, reqCity.bindings)
     .andWhere('user_id', '!=', userId)
     // Skip donors whose user account is blocked or deleted — a donor profile can
     // outlive its account, and such users must never be matched or notified.
     .whereIn('user_id', db('users').where({ status: USER_STATUS.ACTIVE }).select('id'));
+  const donors = candidates.filter((d) => citiesOverlap(b.city, d.city));
 
   if (donors.length) {
     // Batch the match inserts + notifications instead of a serial round-trip
@@ -360,7 +366,7 @@ const donorOpenRequests = asyncHandler(async (req, res) => {
   if (!donor) throw ApiError.notFound('You are not registered as a donor');
   if (!donor.blood_group || !donor.city) return ok(res, []);
 
-  const donorCityFeed = cityMatchRaw('r.city', donor.city);
+  const donorCityFeed = cityOverlapRaw('r.city', donor.city);
   const rows = await db('blood_requests as r')
     .leftJoin('blood_request_matches as m', function joinMatch() {
       this.on('m.blood_request_id', 'r.id').andOn('m.donor_user_id', '=', db.raw('?', [req.user.id]));
@@ -377,7 +383,8 @@ const donorOpenRequests = asyncHandler(async (req, res) => {
       db.raw('CASE WHEN m.contact_shared = 1 THEN r.contact_person_mobile ELSE NULL END as contact_person_mobile')
     )
     .orderBy('r.id', 'desc');
-  return ok(res, rows);
+  // The SQL clause over-matches by design (substring); citiesOverlap decides.
+  return ok(res, rows.filter((r) => citiesOverlap(donor.city, r.city)));
 });
 
 // POST /blood/matches/:id/respond  { action: 'accept' | 'decline' }
@@ -411,7 +418,7 @@ const respondToRequest = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('You cannot respond to your own request.');
   }
   const groupMatches = request.blood_group_required === donor.blood_group;
-  if (!groupMatches || !citiesMatch(donor.city, request.city)) {
+  if (!groupMatches || !citiesOverlap(donor.city, request.city)) {
     throw ApiError.forbidden('This request does not match your blood group or city.');
   }
 

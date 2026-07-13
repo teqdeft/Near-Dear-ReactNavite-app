@@ -6,9 +6,10 @@ const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesOverlap } = require('../utils/cityMatch');
+const { distanceKm, toCoord } = require('../utils/geo');
 const { renameUpload } = require('../utils/fileNaming');
 const {
-  AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES,
+  AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES, USER_STATUS,
   AMBULANCE_APPROVAL, AMBULANCE_DOC_TYPE, DOC_STATUS, AMBULANCE_TYPE,
 } = require('../constants/enums');
 
@@ -130,18 +131,97 @@ const STATUS_TRANSITIONS = {
   [AMBULANCE_STATUS.REQUESTED]: [AMBULANCE_STATUS.CANCELLED],
 };
 
-// Find matching drivers: drivers whose profile city shares any city with the
-// request (token overlap — "Mohali Chandigarh" matches "Kharar Mohali"). Strict
-// by design: if nothing matches, no driver is notified (the request still
-// reaches admins, who can assign it manually).
-async function findNearbyDrivers(city) {
-  if (!city) return [];
-  const drivers = await db('users as u')
+// How far from the pickup a driver can be and still be worth waking. In an
+// emergency the cost of alerting a driver who turns out to be slightly too far
+// is nothing next to the cost of alerting nobody.
+const DRIVER_RADIUS_KM = 10;
+
+/**
+ * How recent a driver's location must be to be believed. An ambulance that last
+ * pinged 30 minutes ago could be two towns away — that coordinate is not a
+ * location, it's a memory.
+ *
+ * The age is computed in SQL, never in JS. MySQL hands back a naive datetime
+ * string ("2026-07-13 09:03:45") with no zone, and `new Date(...)` reads that as
+ * LOCAL time — so on an IST machine every location silently looked 5.5 hours
+ * stale and the radius never fired at all. Doing the arithmetic in the database
+ * keeps the write (NOW()) and the read (TIMESTAMPDIFF against NOW()) on one
+ * clock, with no zone to get wrong.
+ */
+const LOCATION_FRESH_SECONDS = 5 * 60;
+const LOCATION_AGE_SQL = 'TIMESTAMPDIFF(SECOND, l.updated_at, NOW())';
+
+/**
+ * Drivers to notify about a request.
+ *
+ * Two rules decide who is "near", and it is a UNION — either alone is enough:
+ *
+ *   1. their service city overlaps the request's city (what we have always done), OR
+ *   2. their last known location is within DRIVER_RADIUS_KM of the pickup AND that
+ *      location is fresh.
+ *
+ * The direction of the union is the whole safety argument. Rule 2 only ever ADDS
+ * drivers — the one parked 4 km away in a town they never listed, whom city
+ * matching misses. It must never remove one: a driver who is off duty, denied GPS,
+ * or whose phone is asleep has to keep receiving city-matched requests exactly as
+ * before. Narrowing an emergency dispatch to "whoever happened to be sharing GPS"
+ * would not be a feature, it would be a regression that costs lives.
+ *
+ * Separately, every driver here must actually be ABLE to take the trip. Each check
+ * mirrors one acceptRequest enforces, and they must stay in step — a driver we
+ * notify but who is then refused gets an emergency alert they can do nothing about,
+ * and the booking user is told "3 drivers notified" when the number who can come is
+ * zero. That false comfort is the real harm.
+ *
+ *   - approved ambulance -> acceptRequest 403s without one
+ *   - no live trip       -> acceptRequest 409s; an ambulance carries one patient
+ *
+ * `ambulances.status` is deliberately NOT the busy check: it is derived state that
+ * can drift. The live-trip lookup is the same source of truth as the DB lock
+ * `uq_amb_one_active_trip_per_driver`.
+ */
+async function findNearbyDrivers(city, pickup) {
+  const pickupCoord = toCoord(pickup?.latitude, pickup?.longitude);
+  if (!city && !pickupCoord) return []; // nothing to match on at all
+
+  // Everyone who could take a trip right now. Deliberately NOT narrowed by city in
+  // SQL: a driver 4 km away in a town they never listed still qualifies on distance,
+  // and a city WHERE clause would drop them before we ever measured.
+  const candidates = await db('users as u')
     .join('user_profiles as p', 'p.user_id', 'u.id')
+    .join('ambulances as a', 'a.driver_user_id', 'u.id')
+    .leftJoin('driver_locations as l', 'l.driver_user_id', 'u.id')
     .where('u.role', ROLES.AMBULANCE_DRIVER)
-    .andWhere('u.status', 'active')
-    .select('u.id', 'p.city');
-  return drivers.filter((d) => citiesOverlap(city, d.city)).map((d) => ({ id: d.id }));
+    .andWhere('u.status', USER_STATUS.ACTIVE)
+    .andWhere('a.approval_status', AMBULANCE_APPROVAL.APPROVED)
+    .whereNotExists(function liveTrip() {
+      this.select('*').from('ambulance_requests as r')
+        .whereRaw('r.assigned_driver_id = u.id')
+        .whereIn('r.status', DRIVER_BUSY_STATUSES);
+    })
+    .select(
+      'u.id', 'p.city',
+      'l.latitude as driver_latitude', 'l.longitude as driver_longitude',
+      'l.is_on_duty as is_on_duty',
+      db.raw(`${LOCATION_AGE_SQL} as location_age_seconds`)
+    )
+    .groupBy('u.id', 'p.city', 'l.latitude', 'l.longitude', 'l.is_on_duty', 'l.updated_at');
+
+  const matched = candidates.filter((d) => {
+    if (city && citiesOverlap(city, d.city)) return true; // rule 1
+    if (!pickupCoord) return false;
+
+    // Only an on-duty driver is pinging, so an off-duty row is a leftover from
+    // their last shift: a real coordinate that means nothing now.
+    if (!d.is_on_duty) return false;
+    const age = d.location_age_seconds;
+    if (age == null || age < 0 || age > LOCATION_FRESH_SECONDS) return false;
+
+    const km = distanceKm(pickup, { latitude: d.driver_latitude, longitude: d.driver_longitude });
+    return km !== null && km <= DRIVER_RADIUS_KM; // rule 2
+  });
+
+  return matched.map((d) => ({ id: d.id }));
 }
 
 // POST /ambulance/requests
@@ -167,7 +247,7 @@ const createRequest = asyncHandler(async (req, res) => {
   // Notify nearby drivers + admins concurrently — this is a time-critical
   // emergency path, so avoid a serial notify per recipient.
   const [drivers, admins] = await Promise.all([
-    findNearbyDrivers(b.city),
+    findNearbyDrivers(b.city, { latitude: b.pickup_latitude, longitude: b.pickup_longitude }),
     db('users').where({ role: ROLES.ADMIN }).select('id'),
   ]);
   await Promise.all([
@@ -186,7 +266,13 @@ const createRequest = asyncHandler(async (req, res) => {
   ]);
 
   const request = await db('ambulance_requests').where({ id }).first();
-  return created(res, { ...request, notifiedDrivers: drivers.length }, `Request sent. ${drivers.length} nearby driver(s) notified.`);
+  // The count is now the number of drivers who can actually come, so it is safe
+  // to show. Zero is not a failure — admins were notified and assign manually —
+  // but the user must not be left thinking help is already on its way.
+  const message = drivers.length
+    ? `Request sent. ${drivers.length} nearby driver(s) notified.`
+    : 'Request sent. No driver is free nearby right now — our team has been alerted and will assign an ambulance.';
+  return created(res, { ...request, notifiedDrivers: drivers.length }, message);
 });
 
 // GET /ambulance/requests/mine
@@ -225,6 +311,62 @@ const cancelRequest = asyncHandler(async (req, res) => {
   return ok(res, null, 'Request cancelled');
 });
 
+// ---- Driver duty & location -------------------------------------------
+
+// Write the driver's row in driver_locations, creating it on first use.
+async function upsertDriverLocation(driverUserId, patch) {
+  const existing = await db('driver_locations').where({ driver_user_id: driverUserId }).first();
+  if (existing) {
+    await db('driver_locations').where({ driver_user_id: driverUserId }).update(patch);
+  } else {
+    await db('driver_locations').insert({ driver_user_id: driverUserId, ...patch });
+  }
+  return db('driver_locations').where({ driver_user_id: driverUserId }).first();
+}
+
+// GET /ambulance/driver/duty — is this driver on duty, and where were they last?
+const driverDuty = asyncHandler(async (req, res) => {
+  const row = await db('driver_locations').where({ driver_user_id: req.user.id }).first();
+  return ok(res, { is_on_duty: !!row?.is_on_duty, updated_at: row?.updated_at || null });
+});
+
+/**
+ * PUT /ambulance/driver/duty  { on_duty: boolean }
+ *
+ * The driver's own switch. Going off duty CLEARS the stored coordinate rather
+ * than just flipping the flag: we have no business keeping a record of where a
+ * driver was once they have stopped working, and a lingering coordinate is one
+ * bad query away from dispatching to someone who went home an hour ago.
+ */
+const setDriverDuty = asyncHandler(async (req, res) => {
+  const onDuty = Boolean(req.body?.on_duty);
+  const patch = onDuty
+    ? { is_on_duty: true, updated_at: db.fn.now() }
+    : { is_on_duty: false, latitude: null, longitude: null, updated_at: null };
+  const row = await upsertDriverLocation(req.user.id, patch);
+  return ok(res, { is_on_duty: !!row.is_on_duty },
+    onDuty ? 'You are on duty. Nearby requests will reach you.' : 'You are off duty.');
+});
+
+/**
+ * POST /ambulance/driver/ping  { latitude, longitude }
+ *
+ * Where the driver is now. Rejected when they are off duty — the app should not
+ * be sending it, and accepting it anyway would let a coordinate outlive the
+ * consent that produced it.
+ */
+const pingDriverLocation = asyncHandler(async (req, res) => {
+  const coord = toCoord(req.body?.latitude, req.body?.longitude);
+  if (!coord) throw ApiError.badRequest('A valid latitude and longitude are required');
+
+  const row = await db('driver_locations').where({ driver_user_id: req.user.id }).first();
+  if (!row?.is_on_duty) throw ApiError.badRequest('Go on duty before sharing your location.');
+
+  await db('driver_locations').where({ driver_user_id: req.user.id })
+    .update({ latitude: coord.lat, longitude: coord.lng, updated_at: db.fn.now() });
+  return ok(res, null);
+});
+
 // ---- Driver views -----------------------------------------------------
 
 // GET /ambulance/driver/requests  — requests assigned to this driver
@@ -233,19 +375,55 @@ const driverRequests = asyncHandler(async (req, res) => {
   return ok(res, rows);
 });
 
-// GET /ambulance/driver/available  — open requests a driver can accept. Only
-// requests whose city shares a token with the driver's profile city are shown
-// (token overlap, so a multi-city driver matches multi-city requests). Strict:
-// a driver with no profile city, or with no city match, sees nothing.
+/**
+ * GET /ambulance/driver/available — open requests this driver can accept.
+ *
+ * The pull-side mirror of findNearbyDrivers, and it MUST mirror it. A driver we
+ * alerted on distance would otherwise open the app and find an empty list: the
+ * notification says "tap to accept" and there is nothing there to tap. So the
+ * same union applies — a request is shown when its city overlaps the driver's,
+ * OR its pickup is within DRIVER_RADIUS_KM of where the driver is right now.
+ *
+ * `distance_km` rides along so the driver can see which call is closest, and is
+ * null when either side has no coordinate — never a fabricated zero.
+ */
 const driverAvailable = asyncHandler(async (req, res) => {
   const profile = await db('user_profiles').where({ user_id: req.user.id }).first();
   const city = profile?.city;
-  if (!city) return ok(res, []);
+
+  // Age from SQL, never from a parsed datetime string — see LOCATION_AGE_SQL.
+  const loc = await db('driver_locations as l')
+    .where({ driver_user_id: req.user.id })
+    .select('l.latitude', 'l.longitude', 'l.is_on_duty',
+      db.raw(`${LOCATION_AGE_SQL} as location_age_seconds`))
+    .first();
+
+  // Only trust the driver's position if they are on duty and it is fresh — the
+  // same test the dispatcher applies. A stale pin must not silently widen or
+  // narrow what they see.
+  const age = loc?.location_age_seconds;
+  const fresh = age != null && age >= 0 && age <= LOCATION_FRESH_SECONDS;
+  const here = loc && loc.is_on_duty && fresh ? toCoord(loc.latitude, loc.longitude) : null;
+
+  if (!city && !here) return ok(res, []);
+
   const all = await db('ambulance_requests')
     .where({ status: AMBULANCE_STATUS.REQUESTED })
     .whereNull('assigned_driver_id')
     .orderBy('id', 'desc');
-  return ok(res, all.filter((r) => citiesOverlap(r.city, city)));
+
+  const mine = all
+    .map((r) => {
+      const km = here
+        ? distanceKm({ latitude: here.lat, longitude: here.lng },
+          { latitude: r.pickup_latitude, longitude: r.pickup_longitude })
+        : null;
+      return { ...r, distance_km: km === null ? null : Math.round(km * 10) / 10 };
+    })
+    .filter((r) => (city && citiesOverlap(r.city, city))
+      || (r.distance_km !== null && r.distance_km <= DRIVER_RADIUS_KM));
+
+  return ok(res, mine);
 });
 
 // POST /ambulance/requests/:id/accept  — first driver to accept takes the trip
@@ -415,7 +593,9 @@ const releaseRequest = asyncHandler(async (req, res) => {
   });
 
   // Re-notify other nearby drivers (not the one who just released it).
-  const drivers = await findNearbyDrivers(r.city);
+  const drivers = await findNearbyDrivers(r.city, {
+    latitude: r.pickup_latitude, longitude: r.pickup_longitude,
+  });
   await Promise.all([
     ...drivers.filter((d) => d.id !== req.user.id).map((d) => notify(d.id, {
       title: 'Ambulance request available again',
@@ -438,6 +618,7 @@ const releaseRequest = asyncHandler(async (req, res) => {
 module.exports = {
   createRequest, myRequests, requestDetail, cancelRequest,
   driverRequests, driverAvailable, acceptRequest, updateStatus, releaseRequest,
+  driverDuty, setDriverDuty, pingDriverLocation,
   updateLocation, trackRequest,
   registerVehicle, myVehicle, uploadVehicleDocument,
 };

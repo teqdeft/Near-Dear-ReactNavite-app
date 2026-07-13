@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Activi
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
+import { useDelivery } from '../../store/DeliveryContext';
 import { Card, Muted, Loader, IconBadge } from '../../components/UI';
+import DeliverToBar from '../../components/DeliverToBar';
 import Icon from '../../components/Icon';
 import GradientBackground from '../../components/GradientBackground';
 import { colors, spacing, font, radius, shadow } from '../../theme';
@@ -19,6 +21,7 @@ export default function PharmacyHomeScreen({ navigation }) {
   const [results, setResults] = useState(null); // null = no active search
   const [searching, setSearching] = useState(false);
   const { count } = useCart();
+  const { addressId } = useDelivery();
 
   const load = useCallback(async () => {
     try { setCategories((await CatalogApi.categories()) || []); } catch (e) { setCategories([]); }
@@ -33,11 +36,13 @@ export default function PharmacyHomeScreen({ navigation }) {
     if (!term) { setResults(null); setSearching(false); return; }
     setSearching(true);
     try {
-      const rows = await CatalogApi.medicines({ search: term, limit: 8 });
+      // Same scoping as the full list — otherwise the dropdown would offer
+      // medicines from pharmacies that can't deliver to the chosen address.
+      const rows = await CatalogApi.medicines({ search: term, limit: 8, address_id: addressId ?? undefined });
       setResults(rows || []);
     } catch (e) { setResults([]); }
     finally { setSearching(false); }
-  }, []);
+  }, [addressId]);
 
   const onChangeSearch = (text) => {
     setSearch(text);
@@ -54,6 +59,12 @@ export default function PharmacyHomeScreen({ navigation }) {
   return (
     <GradientBackground>
     <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}>
+      {/* The delivery address decides which pharmacies exist for this user, so
+          it sits above the search rather than hidden away in checkout. */}
+      <View style={{ marginBottom: spacing.md }}>
+        <DeliverToBar />
+      </View>
+
       <View style={[styles.hero, shadow.card]}>
         <Icon name="pharmacy" size={34} color={colors.white} />
         <Text style={styles.heroTitle}>Medicines from trusted pharmacies</Text>

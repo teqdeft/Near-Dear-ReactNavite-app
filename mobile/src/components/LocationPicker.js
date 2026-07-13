@@ -16,7 +16,7 @@ async function ensurePermission() {
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       {
         title: 'Use your location',
-        message: 'NearDear uses your location to set an accurate pickup point.',
+        message: 'NearDear uses your location to place the pin accurately on the map.',
         buttonPositive: 'Allow',
         buttonNegative: 'Deny',
       },
@@ -28,16 +28,41 @@ async function ensurePermission() {
 }
 
 /**
- * Uber-style pickup picker: a fixed centre pin sits over a draggable map.
+ * Uber-style location picker: a fixed centre pin sits over a draggable map.
  * Whatever point is under the pin when the map stops is the chosen location.
  * Props:
- *   value    { latitude, longitude } | null   — controlled initial point
- *   onChange (coord) => void                   — fires with the pinned coord
+ *   value      { latitude, longitude } | null  — controlled initial point
+ *   onChange   (coord) => void                  — fires with the pinned coord
+ *   autoLocate boolean                          — jump to the phone's GPS on open
  *   height, label
+ *
+ * autoLocate is right for an ambulance pickup (you are standing at it) and WRONG
+ * for a delivery address: someone in Delhi saving their family's Mohali address
+ * would silently have Delhi pinned under a "Mohali" label, and every pharmacy
+ * actually near that home would then be filtered out as too far away.
  */
-export default function LocationPicker({ value, onChange, height = 220, label = 'Move the map so the pin is on your pickup point' }) {
+export default function LocationPicker({
+  value, onChange, height = 220, autoLocate = true, center,
+  label = 'Move the map so the pin is on your pickup point',
+}) {
   const mapRef = useRef(null);
   const [locating, setLocating] = useState(false);
+
+  /**
+   * Has the user actually chosen a place yet?
+   *
+   * The map has to open SOMEWHERE, and with no value and no city it opens on the
+   * centre of India. react-native-maps fires onRegionChangeComplete once on
+   * mount, so without this guard that arbitrary fallback would be emitted as the
+   * user's pin — an address in the middle of Madhya Pradesh that nobody chose,
+   * silently, for anyone whose city we don't have coordinates for.
+   *
+   * We only trust a coordinate once the user has done one of: dragged the map,
+   * tapped "My location", or picked a city (which the caller passes as `center`).
+   * Until then we emit nothing, and a null pin correctly falls back to matching
+   * by city name.
+   */
+  const armed = useRef(!!value);
 
   const initialRegion = {
     latitude: value?.latitude ?? FALLBACK.latitude,
@@ -54,6 +79,7 @@ export default function LocationPicker({ value, onChange, height = 220, label = 
       (pos) => {
         setLocating(false);
         const { latitude, longitude } = pos.coords;
+        armed.current = true;
         mapRef.current?.animateToRegion(
           { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
           600,
@@ -65,11 +91,37 @@ export default function LocationPicker({ value, onChange, height = 220, label = 
     );
   };
 
-  // Auto-centre on the user's location the first time (only if no value yet).
+  // Centre on the phone's location the first time — but only where "here" is
+  // actually the point being pinned. The "My location" button stays either way,
+  // so a user who IS at the address can still one-tap it.
   useEffect(() => {
-    if (!value) locateMe();
+    if (autoLocate && !value) locateMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Jump to `center` when the caller changes it — the address forms pass the
+   * centre of the city the user just picked, so someone in Delhi saving their
+   * Mohali address lands in Mohali and drags a few hundred metres, instead of
+   * dragging across the country.
+   *
+   * Zoomed out (0.08 ≈ city-wide) on purpose: this is a rough anchor, and the
+   * wide view invites the user to find their own street rather than trusting a
+   * pin that only knows the city. Picking a city IS a choice, so this arms the
+   * picker: settling then emits the city centre as a provisional pin, which the
+   * user refines by dragging.
+   */
+  const centerKey = center ? `${center.latitude},${center.longitude}` : null;
+  useEffect(() => {
+    if (!center) return;
+    armed.current = true;
+    mapRef.current?.animateToRegion(
+      { latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 },
+      600,
+    );
+    // Keyed on the coordinates, not the object: the parent rebuilds it each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerKey]);
 
   return (
     <View style={[styles.wrap, { height }]}>
@@ -78,7 +130,12 @@ export default function LocationPicker({ value, onChange, height = 220, label = 
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
-        onRegionChangeComplete={(r) => onChange?.({ latitude: r.latitude, longitude: r.longitude })}
+        // Dragging the map is the user choosing a point — from here on, trust it.
+        onPanDrag={() => { armed.current = true; }}
+        onRegionChangeComplete={(r) => {
+          if (!armed.current) return; // the opening fallback view — nobody picked it
+          onChange?.({ latitude: r.latitude, longitude: r.longitude });
+        }}
         showsUserLocation
         showsMyLocationButton={false}
         toolbarEnabled={false}

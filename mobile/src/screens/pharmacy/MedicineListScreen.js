@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Activity
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
+import { useDelivery } from '../../store/DeliveryContext';
 import { Card, Pill, Muted, Row, EmptyState, Loader } from '../../components/UI';
+import DeliverToBar from '../../components/DeliverToBar';
 import Icon from '../../components/Icon';
 import { colors, spacing, font, radius } from '../../theme';
 
@@ -11,6 +13,7 @@ const PAGE_SIZE = 20;
 
 export default function MedicineListScreen({ route, navigation }) {
   const params = route.params || {};
+  const { addressId, address } = useDelivery();
   const [search, setSearch] = useState(params.search || '');
   const [items, setItems] = useState(null);
   const [page, setPage] = useState(1);
@@ -27,15 +30,18 @@ export default function MedicineListScreen({ route, navigation }) {
     if (params.title) navigation.setOptions({ title: params.title });
   }, [navigation, params.title]);
 
+  // address_id scopes the catalog to pharmacies that can reach that address
+  // (within 10 km of it, or in a matching city).
   const fetchPage = useCallback(async (pageNum, q) => {
     const data = await CatalogApi.medicines({
       search: (q ?? search) || undefined,
       category_id: params.category_id ?? undefined,
+      address_id: addressId ?? undefined,
       page: pageNum,
       limit: PAGE_SIZE,
     });
     return data || [];
-  }, [search, params.category_id]);
+  }, [search, params.category_id, addressId]);
 
   // First page (or a fresh search/category) — replaces the list.
   const load = useCallback(async (q) => {
@@ -74,7 +80,9 @@ export default function MedicineListScreen({ route, navigation }) {
     finally { setLoadingMore(false); }
   }, [loadingMore, hasMore, items, page, fetchPage]);
 
-  useFocusEffect(useCallback(() => { load(); }, [params.category_id])); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reload when the category OR the delivery address changes — a different
+  // address means a different set of pharmacies, so the list must be refetched.
+  useFocusEffect(useCallback(() => { load(); }, [params.category_id, addressId])); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live search: reload results ~300ms after the user stops typing, so
   // suggestions appear as they type — no need to press the search key.
@@ -103,7 +111,8 @@ export default function MedicineListScreen({ route, navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
+        <DeliverToBar />
+        <View style={[styles.searchBar, { marginTop: spacing.sm }]}>
           <Icon name="search" size={20} color={colors.textMuted} />
           <TextInput style={styles.input} placeholder="Search medicines…" placeholderTextColor={colors.textMuted}
             value={search} onChangeText={onChangeSearch} returnKeyType="search" onSubmitEditing={() => load(search)}
@@ -120,13 +129,31 @@ export default function MedicineListScreen({ route, navigation }) {
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.pharmacy} style={{ marginVertical: spacing.lg }} /> : null}
-          ListEmptyComponent={<EmptyState icon="pharmacy" title="No medicines found" subtitle="Try a different search or category." />}
+          ListEmptyComponent={
+            // Distinguish "nothing matched your search" from "no pharmacy serves
+            // this address" — the old copy blamed the search for both, which sent
+            // people hunting for a spelling mistake that wasn't there.
+            search ? (
+              <EmptyState icon="pharmacy" title="No medicines found"
+                subtitle="Try a different search or category." />
+            ) : (
+              <EmptyState icon="pharmacy" title="No pharmacies deliver here yet"
+                subtitle={address
+                  ? `We couldn't find a pharmacy near ${address.city}. Try another delivery address.`
+                  : 'Add a delivery address to see pharmacies near you.'} />
+            )
+          }
           renderItem={({ item }) => (
             <Card style={styles.card} onPress={() => navigation.navigate('MedicineDetail', { id: item.id })}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.display_name}</Text>
                 <Muted>{[item.strength, item.form].filter(Boolean).join(' • ')}</Muted>
-                <Muted style={{ marginTop: 2 }}>{item.pharmacy_name}</Muted>
+                <Muted style={{ marginTop: 2 }}>
+                  {item.pharmacy_name}
+                  {/* null when either side isn't pinned — say nothing rather
+                      than imply the shop is at zero distance. */}
+                  {item.distance_km != null ? ` • ${item.distance_km} km away` : ''}
+                </Muted>
                 <Row style={{ marginTop: 8 }}>
                   <Text style={styles.price}>₹{Number(item.price).toFixed(0)}</Text>
                   {item.prescription_required ? <Pill label="Rx" color={colors.danger} style={{ marginLeft: 8 }} /> : null}

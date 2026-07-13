@@ -4,6 +4,7 @@ import { ProfileApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip, Muted } from '../../components/UI';
+import CityChipsInput from '../../components/CityChipsInput';
 import { colors, spacing, font, BLOOD_GROUPS } from '../../theme';
 
 export default function ProfileSetupScreen({ navigation }) {
@@ -16,7 +17,9 @@ export default function ProfileSetupScreen({ navigation }) {
 
   const save = async () => {
     if (!name.trim() || !city.trim()) {
-      Alert.alert('Almost there', 'Please enter your name and city.');
+      Alert.alert('Almost there', isDriver
+        ? 'Please enter your name and add at least one city you can serve.'
+        : 'Please enter your name and city.');
       return;
     }
     setLoading(true);
@@ -41,12 +44,12 @@ export default function ProfileSetupScreen({ navigation }) {
       <Muted style={{ marginBottom: spacing.lg }}>This helps us match donors and deliver care faster.</Muted>
 
       <TextField label="Full name *" placeholder="Your name" value={name} onChangeText={setName} />
-      <TextField label="City *" placeholder="Your city" value={city} onChangeText={setCity} />
       {isDriver ? (
-        <Muted style={{ marginBottom: spacing.md }}>
-          Your city helps us send you the nearest ambulance requests.
-        </Muted>
-      ) : null}
+        // A driver covers an area, not a single city — list every one they serve.
+        <CityChipsInput label="Service cities *" value={city} onChange={setCity} color={colors.ambulance} />
+      ) : (
+        <TextField label="City *" placeholder="Your city" value={city} onChangeText={setCity} />
+      )}
 
       {!isDriver && (
         <>

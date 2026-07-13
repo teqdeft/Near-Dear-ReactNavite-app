@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, Alert } from 'react-native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
-import { Screen, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
+import { Screen, AppButton, TextField, SectionTitle, Chip, Muted, Row } from '../../components/UI';
+import Icon from '../../components/Icon';
 import KycGate from '../../components/KycGate';
-import { colors, spacing, BLOOD_GROUPS } from '../../theme';
+import CityPicker from '../../components/CityPicker';
+import { parseCities } from '../../components/CityChipsInput';
+import { colors, spacing, radius, BLOOD_GROUPS } from '../../theme';
 
 const URGENCY = [
   { key: 'normal', label: 'Normal' },
@@ -14,10 +17,12 @@ const URGENCY = [
 ];
 
 export default function CreateBloodRequestScreen({ navigation }) {
-  const { user, aadhaarVerified } = useAuth();
+  const { user, profile, aadhaarVerified } = useAuth();
   const [form, setForm] = useState({
     patient_name: '', patient_age: '', blood_group_required: null, units_required: '1',
-    hospital_name: '', hospital_address: '', city: user?.city || '',
+    // A request names one hospital in one city, so seed it with the first city on
+    // the profile (a donor's profile may list several) — the user can change it.
+    hospital_name: '', hospital_address: '', city: parseCities(profile?.city)[0] || '',
     contact_person_name: user?.name || '', contact_person_mobile: user?.mobile || '',
     urgency_level: 'urgent', notes: '',
   });
@@ -73,7 +78,23 @@ export default function CreateBloodRequestScreen({ navigation }) {
       <SectionTitle style={{ marginTop: spacing.md }}>Hospital</SectionTitle>
       <TextField label="Hospital name *" value={form.hospital_name} onChangeText={(v) => set('hospital_name', v)} />
       <TextField label="Hospital address *" value={form.hospital_address} onChangeText={(v) => set('hospital_address', v)} multiline />
-      <TextField label="City *" value={form.city} onChangeText={(v) => set('city', v)} />
+
+      {/* Donors are matched on city alone, so this is the field that decides who
+          gets notified — call that out instead of leaving it as a plain "City". */}
+      <CityPicker
+        label="City where blood is needed *"
+        value={form.city}
+        onChange={(v) => set('city', v)}
+        color={colors.blood}
+        style={styles.cityField}
+      />
+      <Row style={styles.cityNote}>
+        <Icon name="donor" size={16} color={colors.blood} />
+        <Muted style={styles.cityNoteText}>
+          This is how we find donors. Every available donor who covers this city is
+          notified — so enter the hospital's city, not the patient's home town.
+        </Muted>
+      </Row>
 
       <SectionTitle style={{ marginTop: spacing.md }}>Contact person</SectionTitle>
       <TextField label="Name *" value={form.contact_person_name} onChangeText={(v) => set('contact_person_name', v)} />
@@ -89,4 +110,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   label: { fontSize: 13, color: colors.textMuted, marginBottom: 6, fontWeight: '500' },
+  cityField: { marginBottom: spacing.sm },
+  cityNote: {
+    alignItems: 'flex-start', backgroundColor: colors.blood + '12', borderRadius: radius.md,
+    padding: spacing.md, marginBottom: spacing.md,
+  },
+  cityNoteText: { flex: 1, marginLeft: spacing.sm, lineHeight: 18 },
 });

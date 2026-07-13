@@ -5,6 +5,7 @@ import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Muted, Row, Pill, IconBadge } from '../../components/UI';
 import KycGate from '../../components/KycGate';
+import CityChipsInput from '../../components/CityChipsInput';
 import { colors, spacing, font, BLOOD_GROUPS } from '../../theme';
 
 export default function BecomeDonorScreen({ navigation }) {
@@ -42,7 +43,7 @@ export default function BecomeDonorScreen({ navigation }) {
 
   const submit = async () => {
     if (!bloodGroup) return Alert.alert('Blood group', 'Please select your blood group.');
-    if (!city.trim()) return Alert.alert('City', 'Please enter your city.');
+    if (!city.trim()) return Alert.alert('City', 'Please add at least one city you can donate in.');
     if (!health || !consent) return Alert.alert('Consent required', 'Please accept the health self-declaration and donor consent.');
     setLoading(true);
     try {
@@ -96,7 +97,15 @@ export default function BecomeDonorScreen({ navigation }) {
         ))}
       </View>
 
-      <TextField label="City *" value={city} onChangeText={setCity} placeholder="Your city" />
+      {/* Neighbouring towns are a short drive apart — a donor can list every city
+          they'd travel to, and requests from any of them will reach them. */}
+      <CityChipsInput
+        label="Cities you can donate in *"
+        value={city}
+        onChange={setCity}
+        color={colors.blood}
+        hint="Add nearby cities too — e.g. Mohali and Kharar."
+      />
       <TextField label="Pincode (optional)" value={pincode} onChangeText={setPincode} keyboardType="number-pad" maxLength={6} />
       <TextField label="Last donation date (optional)" value={lastDonation} onChangeText={setLastDonation} placeholder="YYYY-MM-DD" />
 

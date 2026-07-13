@@ -3,6 +3,7 @@ import { PharmacyApi, AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, TextArea, Button, Badge, Loader } from '../../components/UI';
+import MapPicker from '../../components/MapPicker';
 
 // The two documents a pharmacy must submit for approval. (GST / store photo
 // were removed to keep onboarding simple for now.)
@@ -52,6 +53,11 @@ export default function PharmacyProfile() {
             Your pharmacy has been temporarily suspended and is not receiving orders. Please contact support for assistance.
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <div className="section-title">Shop details & location</div>
+        <EditDetails pharmacy={pharmacy} onSaved={reload} />
       </div>
 
       <div className="card">
@@ -171,6 +177,7 @@ function RegisterForm({ onDone }) {
   const [form, setForm] = useState({
     pharmacy_name: '', owner_name: '', mobile: '', email: '', license_number: '',
     gst_number: '', address: '', city: '', state: '', pincode: '',
+    latitude: null, longitude: null,
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -180,6 +187,11 @@ function RegisterForm({ onDone }) {
     e.preventDefault();
     for (const k of ['pharmacy_name', 'owner_name', 'mobile', 'license_number', 'address', 'city']) {
       if (!form[k]) return setError('Please fill all required (*) fields.');
+    }
+    // Without a pin we can only match this shop by city name, so it stays
+    // invisible to nearby customers in an adjacent town. Insist on it up front.
+    if (form.latitude == null || form.longitude == null) {
+      return setError('Please pin your shop on the map — customers are matched to pharmacies near them.');
     }
     setBusy(true); setError('');
     try {
@@ -212,7 +224,86 @@ function RegisterForm({ onDone }) {
         <Input label="State" value={form.state} onChange={(e) => set('state', e.target.value)} />
         <Input label="Pincode" value={form.pincode} onChange={(e) => set('pincode', e.target.value)} />
       </div>
+
+      <MapPicker
+        value={form.latitude != null ? { latitude: form.latitude, longitude: form.longitude } : null}
+        onChange={(c) => setForm((f) => ({ ...f, latitude: c.latitude, longitude: c.longitude }))}
+      />
+
       <Button type="submit" loading={busy}>Submit for approval</Button>
+    </form>
+  );
+}
+
+// Edit an already-registered pharmacy. License / GST are intentionally absent:
+// those were approved against the uploaded documents, and changing them needs a
+// re-upload (which sends the pharmacy back for review).
+function EditDetails({ pharmacy, onSaved }) {
+  const [form, setForm] = useState({
+    pharmacy_name: pharmacy.pharmacy_name || '',
+    owner_name: pharmacy.owner_name || '',
+    mobile: pharmacy.mobile || '',
+    email: pharmacy.email || '',
+    address: pharmacy.address || '',
+    city: pharmacy.city || '',
+    state: pharmacy.state || '',
+    pincode: pharmacy.pincode || '',
+    latitude: pharmacy.latitude != null ? Number(pharmacy.latitude) : null,
+    longitude: pharmacy.longitude != null ? Number(pharmacy.longitude) : null,
+  });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!form.pharmacy_name || !form.address || !form.city) {
+      return setError('Pharmacy name, address and city are required.');
+    }
+    setBusy(true);
+    try {
+      await PharmacyApi.updateMe(form);
+      setSuccess('Saved.');
+      onSaved();
+    } catch (err) { setError(errMessage(err)); }
+    finally { setBusy(false); }
+  };
+
+  const pinned = form.latitude != null && form.longitude != null;
+
+  return (
+    <form onSubmit={submit} style={{ maxWidth: 720 }}>
+      {error && <div className="alert error">{error}</div>}
+      {success && <div className="alert success">{success}</div>}
+      {!pinned && (
+        <div className="alert info" style={{ marginBottom: 12 }}>
+          Your shop isn’t pinned on the map yet. Until it is, customers in nearby towns
+          won’t find you — only those who typed the exact same city name.
+        </div>
+      )}
+      <div className="row">
+        <Input label="Pharmacy name *" value={form.pharmacy_name} onChange={(e) => set('pharmacy_name', e.target.value)} />
+        <Input label="Owner name" value={form.owner_name} onChange={(e) => set('owner_name', e.target.value)} />
+      </div>
+      <div className="row">
+        <Input label="Mobile" value={form.mobile} onChange={(e) => set('mobile', e.target.value)} />
+        <Input label="Email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+      </div>
+      <TextArea label="Address *" value={form.address} onChange={(e) => set('address', e.target.value)} />
+      <div className="row">
+        <Input label="City *" value={form.city} onChange={(e) => set('city', e.target.value)} />
+        <Input label="State" value={form.state} onChange={(e) => set('state', e.target.value)} />
+        <Input label="Pincode" value={form.pincode} onChange={(e) => set('pincode', e.target.value)} />
+      </div>
+
+      <MapPicker
+        value={pinned ? { latitude: form.latitude, longitude: form.longitude } : null}
+        onChange={(c) => setForm((f) => ({ ...f, latitude: c.latitude, longitude: c.longitude }))}
+      />
+
+      <Button type="submit" loading={busy}>Save changes</Button>
     </form>
   );
 }

@@ -28,7 +28,12 @@ router.post(
 router.get('/requests/mine', c.myRequests);
 router.get('/driver/requests', c.driverRequests);
 router.get('/driver/available', c.driverAvailable);
-router.post('/driver/location', c.updateLocation); // driver pushes live GPS
+// On/off duty, and where the driver is while on it — this is what lets a request
+// reach a driver who is physically close but in a town they never listed.
+router.get('/driver/duty', c.driverDuty);
+router.put('/driver/duty', c.setDriverDuty);
+router.post('/driver/ping', c.pingDriverLocation);
+router.post('/driver/location', c.updateLocation); // driver pushes live GPS during a trip
 router.get('/requests/:id', c.requestDetail);
 router.get('/requests/:id/track', c.trackRequest); // user polls live GPS
 router.post('/requests/:id/cancel', c.cancelRequest);

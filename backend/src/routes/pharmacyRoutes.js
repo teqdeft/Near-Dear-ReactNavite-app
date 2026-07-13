@@ -10,6 +10,9 @@ router.use(authenticate);
 // Any logged-in user may register a pharmacy (they get promoted to owner).
 router.post('/register', c.register);
 router.get('/me', c.myPharmacy);
+// Edit the shop's own details — above all its map pin, which decides which
+// customers can see it (see utils/serviceArea).
+router.put('/me', c.updateMyPharmacy);
 router.post('/documents', intoFolder('pharmacy_docs'), upload.single('file'), c.uploadDocument);
 
 // Pharmacy-owner / staff only beyond this point.

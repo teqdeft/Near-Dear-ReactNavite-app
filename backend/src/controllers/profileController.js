@@ -5,6 +5,7 @@ const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { presentUser } = require('../utils/present');
+const { normalizeCityList } = require('../utils/cityMatch');
 const { UPLOAD_ROOT } = require('../middleware/upload');
 
 // PUT /profile  — update name/email + extended profile fields
@@ -20,8 +21,11 @@ const updateProfile = asyncHandler(async (req, res) => {
     });
   }
 
-  const profileFields = { gender, age, date_of_birth, blood_group, city, state, pincode,
-    profile_image, emergency_contact_name, emergency_contact_mobile };
+  // Drivers submit a list of service cities; everyone else a single one. Both
+  // arrive as free text and are stored in the same comma-separated column.
+  const profileFields = { gender, age, date_of_birth, blood_group,
+    city: city === undefined ? undefined : normalizeCityList(city),
+    state, pincode, profile_image, emergency_contact_name, emergency_contact_mobile };
   const cleaned = Object.fromEntries(Object.entries(profileFields).filter(([, v]) => v !== undefined));
 
   const existing = await db('user_profiles').where({ user_id: userId }).first();

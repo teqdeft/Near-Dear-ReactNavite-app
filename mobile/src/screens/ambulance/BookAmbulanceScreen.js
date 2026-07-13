@@ -34,8 +34,16 @@ export default function BookAmbulanceScreen({ navigation }) {
     setLoading(true);
     try {
       const res = await AmbulanceApi.createRequest(form);
-      Alert.alert('Request sent', `Nearby drivers have been notified${res?.notifiedDrivers ? ` (${res.notifiedDrivers})` : ''}. A driver will accept and call you shortly.`);
-      navigation.replace('AmbulanceDetail', { id: res.id });
+      const request = res?.data || {};
+      // Show the server's message verbatim. It knows how many drivers can
+      // actually come — and when that is zero it says so, instead of the old
+      // "a driver will call you shortly", which was a comforting lie in an
+      // emergency where nobody had in fact been reached.
+      Alert.alert(
+        request.notifiedDrivers ? 'Request sent' : 'Request sent — no driver free yet',
+        res?.message || 'Your request has been sent.',
+      );
+      navigation.replace('AmbulanceDetail', { id: request.id });
     } catch (e) {
       Alert.alert('Error', errMessage(e));
     } finally {
