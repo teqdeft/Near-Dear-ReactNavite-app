@@ -16,6 +16,12 @@ const config = {
     name: str(process.env.DB_NAME, 'neardear'),
     poolMin: num(process.env.DB_POOL_MIN, 2),
     poolMax: num(process.env.DB_POOL_MAX, 10),
+    // Managed MySQL (Aiven, PlanetScale, …) refuses plaintext connections.
+    // DB_SSL_CA holds the provider's CA certificate; without it the handshake
+    // fails, since these providers sign with their own CA rather than one Node
+    // already trusts.
+    ssl: str(process.env.DB_SSL, 'false') === 'true',
+    sslCa: str(process.env.DB_SSL_CA, ''),
   },
 
   jwt: {

@@ -1,13 +1,12 @@
 // Human-friendly date/time formatting used across the app.
-// The backend's MySQL session timezone is SYSTEM (not UTC), so knex.fn.now()
-// stores datetimes like "2026-07-02 15:54:43" in the server's LOCAL time — NOT
-// UTC. We therefore parse them as local time (no trailing 'Z'); appending 'Z'
-// would wrongly shift every time by the local UTC offset (e.g. +5:30 in IST).
+// The backend pins its MySQL session to UTC (see knexfile.js), so datetimes
+// arrive as "2026-07-02 15:54:43" in UTC. We append 'Z' so each device renders
+// them in its own local timezone.
 
 function toDate(value) {
   if (!value) return null;
   const iso = typeof value === 'string' && value.includes(' ') && !value.includes('T')
-    ? value.replace(' ', 'T')
+    ? `${value.replace(' ', 'T')}Z`
     : value;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
