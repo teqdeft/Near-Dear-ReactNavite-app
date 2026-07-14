@@ -145,7 +145,7 @@ export default function DriverDashboardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ambulance} colors={[colors.ambulance]} />}>
         {/* Top row — profile picture with the KYC badge attached, and online status. */}
         <View style={styles.topRow}>
           <View style={styles.profileSection}>

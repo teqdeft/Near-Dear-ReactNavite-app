@@ -44,29 +44,24 @@ function getApp() {
   return app;
 }
 
-// FCM tells us when an address is dead: the app was uninstalled, or the token was
-// reissued. Those rows can never receive anything again, so drop them instead of
-// retrying them on every future notification.
+// FCM says an address is dead — app uninstalled, or the token was reissued — with
+// exactly these codes. Rows matching them can never receive anything again, so they
+// are dropped rather than retried on every future notification.
+//
+// 'messaging/invalid-argument' is deliberately NOT in this list. It is FCM's
+// catch-all for anything it disliked about the REQUEST, including faults in the
+// message rather than the token. Treating it as a dead address means one malformed
+// payload deletes every device a user owns, and they then receive nothing until the
+// app happens to re-register.
 const DEAD_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
-  'messaging/invalid-argument',
 ]);
 
-/**
- * @param {number} userId
- * @param {{ title: string, message: string, type: string, referenceId: number|null }} payload
- */
-async function sendToUser(userId, { title, message, type, referenceId }) {
-  const fb = getApp();
-  if (!fb) return;
-
-  const rows = await db('device_tokens').where({ user_id: userId }).select('id', 'token');
-  if (!rows.length) return; // user has never opened the app on a device, or logged out everywhere
-
-  const res = await getMessaging(fb).sendEachForMulticast({
-    tokens: rows.map((r) => r.token),
-
+// The message FCM actually carries. Shared by both send paths so a change to the
+// channel, icon or priority cannot apply to one-off notifications but not fan-outs.
+function buildMessage({ title, message, type, referenceId }) {
+  return {
     // `notification` is what Android renders in the tray on its own while the app
     // is backgrounded. `data` is what the app reads on tap to decide which screen
     // to open — values must be strings, FCM rejects numbers and null.
@@ -87,21 +82,77 @@ async function sendToUser(userId, { title, message, type, referenceId }) {
         // know about means the notification is silently dropped on Android 8+.
         channelId: 'neardear_alerts',
         sound: 'default',
+
+        // Android paints the small icon as a mask — it keeps the alpha and throws
+        // the colour away — so this names a white-silhouette drawable, not the app
+        // icon. Skip it and the status bar shows a featureless grey square.
+        icon: 'ic_notification',
+        color: '#16A34A',
+
+        // These are alerts someone may need to act on without unlocking first: a
+        // donor seeing a blood request, a driver seeing a dispatch. PRIVATE (the
+        // default) hides the text on the lock screen, which for an emergency ping
+        // defeats the purpose.
+        visibility: 'public',
       },
     },
-  });
+  };
+}
 
-  if (res.failureCount === 0) return;
+// FCM caps a multicast at 500 tokens per call.
+const FCM_BATCH = 500;
 
+async function sendToTokenRows(rows, payload) {
+  const fb = getApp();
+  if (!fb || !rows.length) return;
+
+  const messaging = getMessaging(fb);
   const dead = [];
-  res.responses.forEach((r, i) => {
-    if (r.success) return;
-    const code = r.error?.code;
-    if (DEAD_TOKEN_CODES.has(code)) dead.push(rows[i].id);
-    else console.error('[push] send failed for token', rows[i].id, '-', code, r.error?.message);
-  });
+
+  for (let i = 0; i < rows.length; i += FCM_BATCH) {
+    const chunk = rows.slice(i, i + FCM_BATCH);
+    // eslint-disable-next-line no-await-in-loop
+    const res = await messaging.sendEachForMulticast({
+      tokens: chunk.map((r) => r.token),
+      ...buildMessage(payload),
+    });
+
+    if (res.failureCount === 0) continue;
+
+    res.responses.forEach((r, j) => {
+      if (r.success) return;
+      const code = r.error?.code;
+      if (DEAD_TOKEN_CODES.has(code)) dead.push(chunk[j].id);
+      else console.error('[push] send failed for token', chunk[j].id, '-', code, r.error?.message);
+    });
+  }
 
   if (dead.length) await db('device_tokens').whereIn('id', dead).del();
 }
 
-module.exports = { sendToUser };
+/**
+ * @param {number} userId
+ * @param {{ title: string, message: string, type: string, referenceId: number|null }} payload
+ */
+async function sendToUser(userId, payload) {
+  if (!getApp()) return;
+  const rows = await db('device_tokens').where({ user_id: userId }).select('id', 'token');
+  // No rows = the user has never opened the app on a device, or logged out everywhere.
+  await sendToTokenRows(rows, payload);
+}
+
+/**
+ * The same notification to many users, in ONE FCM round-trip rather than one per
+ * user. A blood request can match a hundred donors; sending serially would have the
+ * requester waiting on a hundred sequential HTTPS calls before their request even
+ * returns.
+ *
+ * @param {number[]} userIds
+ */
+async function sendToUsers(userIds, payload) {
+  if (!getApp() || !userIds.length) return;
+  const rows = await db('device_tokens').whereIn('user_id', userIds).select('id', 'token');
+  await sendToTokenRows(rows, payload);
+}
+
+module.exports = { sendToUser, sendToUsers };

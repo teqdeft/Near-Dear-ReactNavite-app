@@ -3,6 +3,7 @@ import { Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import client, { TOKEN_KEY, REFRESH_KEY, clearTokens, setSessionExpiredHandler } from '../api/client';
 import { AuthApi } from '../api';
+import * as Push from '../services/push';
 
 const AuthContext = createContext(null);
 
@@ -43,6 +44,12 @@ export function AuthProvider({ children }) {
   // deleted by an admin), force a logout and tell the user.
   useEffect(() => {
     setSessionExpiredHandler((message, code) => {
+      // Same reason as the explicit logout below: leave the device registered and
+      // this phone keeps receiving the ejected user's alerts, which carry other
+      // people's names and phone numbers. Fire-and-forget — the session is already
+      // gone, so this may 401, and we must not block signing the user out on it.
+      Push.unregisterDevice();
+
       setUser(null);
       setProfile(null);
       setDonor(null);
@@ -90,6 +97,12 @@ export function AuthProvider({ children }) {
   }, [completeLogin]);
 
   const logout = useCallback(async () => {
+    // Before clearTokens(): the endpoint is authenticated, so once the access
+    // token is gone this can only 401. Without it the phone keeps its FCM
+    // registration and the next user to sign in on it would receive the previous
+    // user's alerts in the tray.
+    await Push.unregisterDevice();
+
     try {
       await clearTokens();
     } catch (e) {

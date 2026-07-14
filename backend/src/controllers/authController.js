@@ -8,10 +8,13 @@ const otpService = require('../services/otpService');
 const aadhaarService = require('../services/aadhaarService');
 const { presentUser } = require('../utils/present');
 const { renameUpload } = require('../utils/fileNaming');
+const { notify, notifyMany } = require('../services/notificationService');
 const config = require('../config');
 
 const fileUrl = (p) => (p ? `${config.appUrl}/api/v1/files/${p}` : null);
-const { ROLES, USER_STATUS, AADHAAR_KYC_STATUS } = require('../constants/enums');
+const {
+  ROLES, USER_STATUS, AADHAAR_KYC_STATUS, NOTIFICATION_TYPE,
+} = require('../constants/enums');
 
 // Resolve the OTP destination from the chosen channel.
 function otpDestination(channel, { mobile, email }) {
@@ -197,6 +200,16 @@ const forgotPasswordReset = asyncHandler(async (req, res) => {
   await otpService.verifyOtp({ channel, destination }, code, 'reset_password');
   const password_hash = await bcrypt.hash(newPassword, 10);
   await db('users').where({ id: user.id }).update({ password_hash });
+
+  // A password reset is exactly what an account takeover looks like. If the real
+  // owner did it, this is a receipt; if they did not, it is the only warning they
+  // will get, and it reaches devices the attacker does not control.
+  await notify(user.id, {
+    title: '🔒 Your password was reset',
+    message: 'Your NearDear password was just reset. If this was not you, contact support immediately — someone else may have access to your account.',
+    type: NOTIFICATION_TYPE.ADMIN,
+  });
+
   return ok(res, {}, 'Password reset successful. Please log in with your new password.');
 });
 
@@ -210,6 +223,13 @@ const changePassword = asyncHandler(async (req, res) => {
   if (!matches) throw ApiError.unauthorized('Current password is incorrect');
   const password_hash = await bcrypt.hash(newPassword, 10);
   await db('users').where({ id: user.id }).update({ password_hash });
+
+  await notify(user.id, {
+    title: '🔒 Password changed',
+    message: 'Your NearDear password was changed. If this was not you, contact support immediately.',
+    type: NOTIFICATION_TYPE.ADMIN,
+  });
+
   return ok(res, {}, 'Password changed successfully');
 });
 
@@ -322,6 +342,25 @@ const aadhaarManualSubmit = asyncHandler(async (req, res) => {
   });
 
   await db('users').where({ id: req.user.id }).update({ aadhaar_kyc_status: AADHAAR_KYC_STATUS.PENDING });
+
+  // Manual KYC is reviewed by a human, so it only moves when an admin is told it
+  // is waiting. Without this alert a submission can sit unreviewed for days while
+  // the user is locked out of every feature that requires verification.
+  const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
+  await Promise.all([
+    notifyMany(admins.map((a) => a.id), {
+      title: '🪪 Aadhaar awaiting review',
+      message: `${owner?.name || 'A user'} submitted their Aadhaar for verification. They cannot use blood, ambulance or pharmacy features until it is reviewed.`,
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: id,
+    }),
+    notify(req.user.id, {
+      title: '⏳ Aadhaar submitted',
+      message: 'We received your Aadhaar photos. Our team is reviewing them and you\'ll be notified as soon as it\'s verified — usually within a few hours.',
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: id,
+    }),
+  ]);
 
   const row = await db('aadhaar_kyc_submissions').where({ id }).first();
   return created(res, {

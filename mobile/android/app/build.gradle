@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "com.google.gms.google-services"
 
 // Icon fonts for react-native-vector-icons are bundled directly via
 // android/app/src/main/assets/fonts (see that folder), so no fonts.gradle here.

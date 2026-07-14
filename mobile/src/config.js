@@ -10,8 +10,7 @@
  */
 
 // --- Production (used by release builds / the APK) ---
-// TODO: replace with your Render URL once the service is live.
-const PROD_API_BASE_URL = 'https://neardear-api.onrender.com/api/v1';
+const PROD_API_BASE_URL = 'https://near-dear-react-navite-app.vercel.app/api/v1';
 
 // --- Development (used by debug builds) ---
 // Your PC's Wi-Fi LAN IP (phone must be on the same network). Find it with

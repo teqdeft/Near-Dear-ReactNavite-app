@@ -15,6 +15,10 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        // Reads app/google-services.json at build time and bakes the Firebase
+        // project's ids into the APK. Without it @react-native-firebase throws
+        // "No Firebase App '[DEFAULT]' has been created" at runtime.
+        classpath("com.google.gms:google-services:4.4.2")
     }
 }
 

@@ -5,6 +5,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { notify } = require('../services/notificationService');
 const { servesTarget } = require('../utils/serviceArea');
+const { money } = require('../utils/notificationCopy');
 const {
   ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, PHARMACY_APPROVAL,
   ACTIVE_STATUS, STOCK_STATUS, NOTIFICATION_TYPE,
@@ -147,12 +148,26 @@ const placeOrder = asyncHandler(async (req, res) => {
     return id;
   });
 
-  await notify(pharmacy.owner_user_id, {
-    title: 'New medicine order',
-    message: `Order ${orderNumber} placed (₹${total}).`,
-    type: NOTIFICATION_TYPE.MEDICINE_ORDER,
-    referenceId: orderId,
-  });
+  const itemCount = orderItems.length;
+  await Promise.all([
+    // The pharmacy is deciding whether to get up and pack this. Item count and
+    // value are what that decision runs on.
+    notify(pharmacy.owner_user_id, {
+      title: '🛒 New medicine order',
+      message: `Order ${orderNumber} — ${itemCount} item${itemCount > 1 ? 's' : ''}, ${money(total)} (${payment_method === PAYMENT_METHOD.COD ? 'Cash on delivery' : 'Paid online'}). Tap to accept or reject.`,
+      type: NOTIFICATION_TYPE.MEDICINE_ORDER,
+      referenceId: orderId,
+    }),
+    // And the buyer gets a receipt they can find later without digging through
+    // the app — an order number and an amount, which is what they will be asked
+    // for if anything goes wrong.
+    notify(userId, {
+      title: '✅ Order placed',
+      message: `Order ${orderNumber} sent to ${pharmacy.pharmacy_name} — ${itemCount} item${itemCount > 1 ? 's' : ''}, ${money(total)}. We'll notify you as soon as they accept it.`,
+      type: NOTIFICATION_TYPE.MEDICINE_ORDER,
+      referenceId: orderId,
+    }),
+  ]);
 
   const order = await db('medicine_orders').where({ id: orderId }).first();
   return created(res, order, 'Order placed');
@@ -203,6 +218,20 @@ const cancelOrder = asyncHandler(async (req, res) => {
   await db('order_status_history').insert({
     order_id: order.id, status: ORDER_STATUS.CANCELLED, changed_by_user_id: req.user.id, note: req.body.reason || null,
   });
+
+  // The pharmacy is looking at this order in their queue right now. Cancelling it
+  // in the database does not take it off their counter — only telling them does,
+  // and they may already be packing it.
+  const pharmacy = await db('pharmacies').where({ id: order.pharmacy_id }).first();
+  if (pharmacy) {
+    await notify(pharmacy.owner_user_id, {
+      title: '🚫 Order cancelled',
+      message: `Order ${order.order_number} (${money(order.total_amount)}) was cancelled by the customer.${req.body.reason ? ` Reason: ${req.body.reason}.` : ''} No action needed — please don't dispatch it.`,
+      type: NOTIFICATION_TYPE.MEDICINE_ORDER,
+      referenceId: order.id,
+    });
+  }
+
   return ok(res, null, 'Order cancelled');
 });
 

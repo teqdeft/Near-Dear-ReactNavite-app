@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 
 const FILTERS = ['pending', 'approved', 'rejected', ''];
 
@@ -32,7 +33,7 @@ export default function AdminAadhaar() {
                 <tr key={s.id}>
                   <td><b>{s.user_name}</b></td>
                   <td className="muted">{s.user_mobile}{s.user_email ? ` • ${s.user_email}` : ''}</td>
-                  <td className="muted">{new Date(s.created_at).toLocaleString()}</td>
+                  <td className="muted">{formatDateTime(s.created_at)}</td>
                   <td><Badge value={s.status} /></td>
                   <td><Button size="sm" variant="outline" onClick={() => setDetailId(s.id)}>Review</Button></td>
                 </tr>

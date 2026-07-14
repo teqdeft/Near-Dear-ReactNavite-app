@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { useAuth } from '../../store/AuthContext';
@@ -19,6 +19,16 @@ export default function ProfileScreen({ navigation }) {
   const [city, setCity] = useState(profile?.city || '');
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Aadhaar KYC is approved by an admin, not by anything the user does here — so
+  // a pull is the only way they can find out it went through without restarting
+  // the app.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refreshUser(); } catch (e) { /* keep what we have */ }
+    setRefreshing(false);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -68,7 +78,12 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}
+        refreshControl={(
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
+            tintColor={isDriver ? colors.ambulance : colors.primary}
+            colors={[isDriver ? colors.ambulance : colors.primary]} />
+        )}>
         <View style={styles.headerCard}>
           <TouchableOpacity activeOpacity={0.85} onPress={choosePhoto} disabled={uploadingPhoto}>
             <ProfileAvatar path={profile?.profile_image} name={user?.name} size={84}

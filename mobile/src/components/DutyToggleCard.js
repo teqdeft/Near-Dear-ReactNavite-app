@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Switch, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Switch, Animated, Easing, TouchableOpacity } from 'react-native';
 import Icon from './Icon';
 import { parseCities } from './CityChipsInput';
 import { colors, spacing, font, radius, shadow } from '../theme';
@@ -33,18 +33,18 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
       return undefined;
     }
 
-    dotScale.setValue(0.6);
-    Animated.spring(dotScale, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
+    dotScale.setValue(0.5);
+    Animated.spring(dotScale, { toValue: 1, friction: 4, tension: 110, useNativeDriver: true }).start();
 
     const pulseLoop = Animated.loop(
       Animated.timing(pulse, {
-        toValue: 1, duration: 2200, easing: Easing.out(Easing.ease), useNativeDriver: true,
+        toValue: 1, duration: 2400, easing: Easing.out(Easing.ease), useNativeDriver: true,
       }),
     );
     const glowLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
     pulseLoop.start();
@@ -93,12 +93,10 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
           </Text>
         </View>
 
-        <Switch
+        <ModernToggle
           value={onDuty}
           disabled={busy}
           onValueChange={onChange}
-          trackColor={{ true: colors.ambulance, false: colors.border }}
-          thumbColor={colors.white}
         />
       </View>
 
@@ -137,19 +135,78 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
   );
 }
 
+// Modern animated toggle button
+function ModernToggle({ value, disabled, onValueChange }) {
+  const thumbPosition = useRef(new Animated.Value(value ? 34 : 2)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(thumbPosition, {
+        toValue: value ? 34 : 2,
+        duration: 300,
+        easing: Easing.bezier(0.34, 1.56, 0.64, 1),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [value, thumbPosition]);
+
+  const handlePress = () => {
+    if (!disabled) {
+      scaleAnim.setValue(0.9);
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        tension: 120,
+        useNativeDriver: true,
+      }).start();
+      onValueChange(!value);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={handlePress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <Animated.View
+        style={[
+          styles.toggleContainer,
+          value ? styles.toggleContainerOn : styles.toggleContainerOff,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.toggleThumb,
+            { transform: [{ translateX: thumbPosition }] },
+          ]}
+        >
+          <Icon
+            name={value ? 'check' : 'x'}
+            size={16}
+            color={value ? colors.ambulance : colors.border}
+          />
+        </Animated.View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
 // One "you do / you don't get this" row. A tick when it's active, the plain icon
 // when it isn't — so the difference between the two states reads at a glance.
 function Line({ on, icon, text, hint }) {
   const scale = useRef(new Animated.Value(1)).current;
   const first = useRef(true);
 
-  // Pop the badge when the row flips. Reset to 0.7 first — springing from 1 to 1
+  // Pop the badge when the row flips. Reset to 0.85 first — springing from 1 to 1
   // (which is what happens if you only call spring on change) animates nothing at
   // all, so the toggle would look dead.
   useEffect(() => {
     if (first.current) { first.current = false; return; } // no pop on mount
-    scale.setValue(0.7);
-    Animated.spring(scale, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }).start();
+    scale.setValue(0.85);
+    Animated.spring(scale, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }).start();
   }, [on, scale]);
 
   return (
@@ -169,46 +226,109 @@ function Line({ on, icon, text, hint }) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1.5, marginBottom: spacing.lg },
-  cardOn: { backgroundColor: colors.ambulanceLight, borderColor: colors.ambulance },
-  cardOff: { backgroundColor: colors.surface, borderColor: colors.border },
+  card: { 
+    borderRadius: 20, 
+    padding: spacing.lg, 
+    borderWidth: 0,
+    marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  cardOn: { 
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1.5,
+    borderColor: colors.ambulance + '20',
+  },
+  cardOff: { 
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
 
   head: { flexDirection: 'row', alignItems: 'center' },
 
   // Sized to hold the halo at full expansion (18 * 2.8 ≈ 50) — a smaller box and
   // the pulse would be clipped mid-breath.
-  dotWrap: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 16, height: 16, borderRadius: 8, zIndex: 3 },
+  dotWrap: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 18, height: 18, borderRadius: 9, zIndex: 3, shadowColor: colors.ambulance, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   glowRing: {
-    position: 'absolute', width: 28, height: 28, borderRadius: 14,
-    borderWidth: 2, borderColor: colors.ambulance, zIndex: 2,
+    position: 'absolute', width: 32, height: 32, borderRadius: 16,
+    borderWidth: 2.5, borderColor: colors.ambulance, zIndex: 2,
   },
   halo: {
-    position: 'absolute', width: 16, height: 16, borderRadius: 8,
+    position: 'absolute', width: 18, height: 18, borderRadius: 9,
     backgroundColor: colors.ambulance, zIndex: 1,
   },
 
-  titleWrap: { flex: 1, marginLeft: spacing.xs },
-  title: { fontSize: font.h3, fontWeight: font.bold },
-  subtitle: { fontSize: font.tiny, color: colors.textMuted, marginTop: 2, fontWeight: font.medium },
+  titleWrap: { flex: 1, marginLeft: spacing.md },
+  title: { fontSize: font.h3, fontWeight: '600', letterSpacing: -0.3 },
+  subtitle: { fontSize: font.tiny, color: colors.textMuted, marginTop: 4, fontWeight: '500' },
 
-  divider: { height: 1, backgroundColor: colors.border, marginTop: spacing.md },
+  divider: { height: 1.5, backgroundColor: colors.border + '30', marginTop: spacing.md, marginHorizontal: -spacing.lg },
 
-  lines: { marginTop: spacing.sm },
-  line: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.md },
+  lines: { marginTop: spacing.md, paddingHorizontal: 0 },
+  line: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.lg, paddingHorizontal: 0 },
   lineIcon: {
-    width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    marginRight: spacing.md, marginTop: 1,
+    width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    marginRight: spacing.md, marginTop: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  lineText: { fontSize: font.small, fontWeight: font.semibold, color: colors.text },
-  lineHint: { fontSize: font.tiny, color: colors.textMuted, marginTop: 2 },
+  lineText: { fontSize: font.small, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  lineHint: { fontSize: font.tiny, color: colors.textMuted, marginTop: 3, lineHeight: 16, fontWeight: '400' },
 
   footer: {
     flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.lg,
-    paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.ambulance + '33',
+    paddingTop: spacing.md, paddingHorizontal: spacing.sm, borderTopWidth: 1.5, 
+    borderTopColor: colors.ambulance + '20',
+    backgroundColor: colors.ambulance + '08',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    marginHorizontal: -spacing.lg,
+    marginBottom: -spacing.lg,
+    paddingBottom: spacing.md,
   },
   footerText: {
-    flex: 1, fontSize: font.tiny, color: colors.ambulance, marginLeft: 6,
-    lineHeight: 16, fontWeight: font.medium,
+    flex: 1, fontSize: font.tiny, color: colors.ambulance, marginLeft: 8,
+    lineHeight: 18, fontWeight: '500', letterSpacing: 0.2,
+  },
+
+  // Modern Toggle Styles
+  toggleContainer: {
+    width: 68,
+    height: 36,
+    borderRadius: 18,
+    padding: 2,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  toggleContainerOn: {
+    backgroundColor: colors.ambulance,
+  },
+  toggleContainerOff: {
+    backgroundColor: colors.border,
+  },
+  toggleThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });

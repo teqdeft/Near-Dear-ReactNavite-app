@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Loader, ErrorState } from '../../components/UI';
+import { formatDate } from '../../utils/datetime';
 
 const FILTERS = [
   { key: 'active', label: 'Active donors' },
@@ -40,7 +41,7 @@ export default function AdminDonors() {
                       ? <Badge value="available" />
                       : <span className="muted">{donor.is_available ? donor.status : 'unavailable'}</span>}
                   </td>
-                  <td className="muted">{donor.last_donation_date ? new Date(donor.last_donation_date).toLocaleDateString() : '—'}</td>
+                  <td className="muted">{donor.last_donation_date ? formatDate(donor.last_donation_date) : '—'}</td>
                 </tr>
               ))}
             </tbody>

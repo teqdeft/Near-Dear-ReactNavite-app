@@ -1,9 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Live ambulance tracking -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Push notifications. Runtime-granted on Android 13+; the app asks for it
+         on first launch. Denied means every notification is silently dropped. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
       android:name=".MainApplication"
@@ -20,6 +24,31 @@
       <meta-data
         android:name="com.google.android.geo.API_KEY"
         android:value="${GOOGLE_MAPS_API_KEY}" />
+
+      <!-- Status-bar icon and tint for pushes. These are the fallback Firebase
+           uses when a message names no icon; without them Android falls back to
+           the app icon, which it renders as a featureless grey square.
+
+           tools:replace is required on the colour: @react-native-firebase/messaging
+           ships this same meta-data set to @color/white, and the manifest merger
+           treats two different values for one key as an error rather than picking
+           one. This says ours wins. -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_notification" />
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_color"
+        android:resource="@color/notification_accent"
+        tools:replace="android:resource" />
+      <!-- The channel used by any message that does not name one — a Firebase
+           Console campaign, or a future call site that omits the android block.
+           Without it those fall back to the SDK's auto-created "Miscellaneous"
+           channel at DEFAULT importance: no heads-up, no sound, and held under
+           Doze — exactly what neardear_alerts exists to prevent. -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="neardear_alerts"
+        tools:replace="android:value" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

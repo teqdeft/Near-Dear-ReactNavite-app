@@ -5,10 +5,11 @@ const config = require('../config');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { notify } = require('../services/notificationService');
+const { notify, notifyMany } = require('../services/notificationService');
 const { UPLOAD_ROOT } = require('../middleware/upload');
 const { renameUpload } = require('../utils/fileNaming');
 const { toCoord } = require('../utils/geo');
+const { ORDER_STATUS_COPY } = require('../utils/notificationCopy');
 const {
   ROLES, PHARMACY_APPROVAL, DOC_TYPE, DOC_STATUS, ORDER_STATUS,
   PRESCRIPTION_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, MEDICINE_FORM,
@@ -91,12 +92,20 @@ const register = asyncHandler(async (req, res) => {
 
   // Notify admins.
   const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
-  await Promise.all(admins.map((a) => notify(a.id, {
-    title: 'New pharmacy registration',
-    message: `${b.pharmacy_name} is awaiting approval.`,
-    type: NOTIFICATION_TYPE.ADMIN,
-    referenceId: id,
-  })));
+  await Promise.all([
+    notifyMany(admins.map((a) => a.id), {
+      title: '📋 New pharmacy awaiting approval',
+      message: `${b.pharmacy_name}${b.city ? ` in ${b.city}` : ''} registered and is waiting for review. They cannot sell until you approve them.`,
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: id,
+    }),
+    notify(req.user.id, {
+      title: '⏳ Pharmacy submitted for review',
+      message: `${b.pharmacy_name} has been submitted. Our team will verify your documents and notify you once approved — you can start listing medicines then.`,
+      type: NOTIFICATION_TYPE.ADMIN,
+      referenceId: id,
+    }),
+  ]);
 
   const pharmacy = await db('pharmacies').where({ id }).first();
   return created(res, pharmacy, 'Pharmacy registered. Awaiting admin approval.');
@@ -178,12 +187,22 @@ const uploadDocument = asyncHandler(async (req, res) => {
     await db('pharmacies').where({ id: pharmacy.id })
       .update({ approval_status: PHARMACY_APPROVAL.PENDING, approved_at: null, approved_by: null });
     const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
-    await Promise.all(admins.map((a) => notify(a.id, {
-      title: 'Pharmacy document re-uploaded',
-      message: `${pharmacy.pharmacy_name} re-uploaded a document — needs re-approval.`,
-      type: NOTIFICATION_TYPE.ADMIN,
-      referenceId: pharmacy.id,
-    })));
+    await Promise.all([
+      notifyMany(admins.map((a) => a.id), {
+        title: '📄 Pharmacy document re-uploaded',
+        message: `${pharmacy.pharmacy_name} re-uploaded a document and is back in the approval queue. They cannot sell until you re-approve them.`,
+        type: NOTIFICATION_TYPE.ADMIN,
+        referenceId: pharmacy.id,
+      }),
+      // The owner just took their own pharmacy offline without being told. Without
+      // this they watch orders stop arriving and assume the app is broken.
+      notify(pharmacy.owner_user_id, {
+        title: '⏳ Pharmacy paused for re-verification',
+        message: `Because you re-uploaded a document, ${pharmacy.pharmacy_name} is pending review again and is temporarily not accepting orders. We'll notify you as soon as it's approved.`,
+        type: NOTIFICATION_TYPE.ADMIN,
+        referenceId: pharmacy.id,
+      }),
+    ]);
   }
 
   const doc = await db('pharmacy_documents').where({ id }).first();
@@ -522,12 +541,14 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   await db('order_status_history').insert({
     order_id: order.id, status, changed_by_user_id: req.user.id, note: reason || null,
   });
-  await notify(order.user_id, {
-    title: 'Order update',
-    message: `Order ${order.order_number} is now: ${status.replace(/_/g, ' ')}.`,
-    type: NOTIFICATION_TYPE.MEDICINE_ORDER,
-    referenceId: order.id,
-  });
+  const copy = ORDER_STATUS_COPY[status];
+  if (copy) {
+    await notify(order.user_id, {
+      ...copy(order, pharmacy.pharmacy_name, reason),
+      type: NOTIFICATION_TYPE.MEDICINE_ORDER,
+      referenceId: order.id,
+    });
+  }
   return ok(res, { status }, 'Order status updated');
 });
 

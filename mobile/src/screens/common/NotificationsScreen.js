@@ -8,6 +8,7 @@ import { useNotifications } from '../../store/NotificationContext';
 import { Muted, Row, EmptyState, Loader, IconBadge } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { timeAgo } from '../../utils/datetime';
+import { notificationTarget } from '../../utils/notificationTarget';
 import { colors, spacing, font, radius } from '../../theme';
 
 const TYPE_ICON = {
@@ -19,40 +20,10 @@ const TYPE_ICON = {
   support: { icon: 'support', color: colors.info },
 };
 
-// Where a notification should take the user when tapped. reference_id points to
-// the related entity (order / request id). Returns null when there is no
-// meaningful detail screen (e.g. generic admin alerts) or the target screen
-// isn't part of the current user's navigator.
-function notificationTarget(item, { isDriver, isDonor }) {
-  const id = item.reference_id;
-  if (isDriver) {
-    // The driver stack only registers the driver tabs + Support.
-    if (item.type === 'ambulance') return { screen: 'DriverTrips' };
-    if (item.type === 'support') return { screen: 'Support' };
-    return null;
-  }
-  switch (item.type) {
-    case 'medicine_order': return id ? { screen: 'OrderDetail', params: { id } } : null;
-    case 'ambulance': return id ? { screen: 'AmbulanceDetail', params: { id } } : null;
-    case 'blood_accepted':
-      // Requester-facing: a donor accepted THIS user's request, so always open
-      // their own request detail — even if the user is also a donor.
-      return id ? { screen: 'BloodRequestDetail', params: { id } } : null;
-    case 'blood':
-      // Donor-facing (a request near them). Donors act on it from the "Requests
-      // for me" list (accept / decline); the requester's contact stays hidden
-      // there until they accept. A non-donor requester tracks their own request
-      // in its detail page.
-      if (isDonor) return { screen: 'DonorRequests' };
-      return id ? { screen: 'BloodRequestDetail', params: { id } } : null;
-    case 'support': return { screen: 'Support' };
-    default: return null;
-  }
-}
-
 export default function NotificationsScreen({ navigation }) {
   const { isDriver, user, donor } = useAuth();
   const isDonor = !!donor || user?.role === 'donor';
+  const isPharmacyOwner = user?.role === 'pharmacy_owner';
   const { setUnread } = useNotifications();
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,7 +43,7 @@ export default function NotificationsScreen({ navigation }) {
   const tap = (item) => {
     // Mark read in the background so navigation feels instant.
     if (!item.is_read) { NotificationApi.markRead(item.id).then(load).catch(() => {}); }
-    const target = notificationTarget(item, { isDriver, isDonor });
+    const target = notificationTarget(item, { isDriver, isDonor, isPharmacyOwner });
     if (target) navigation.navigate(target.screen, target.params);
   };
 

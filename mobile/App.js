@@ -8,6 +8,7 @@ import { NotificationProvider } from './src/store/NotificationContext';
 import { CartProvider } from './src/store/CartContext';
 import { DeliveryProvider } from './src/store/DeliveryContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import { navigationRef, flushPendingNavigation } from './src/navigation/navigationRef';
 import { colors } from './src/theme';
 
 enableScreens();
@@ -35,7 +36,15 @@ export default function App() {
           <CartProvider>
             {/* Inside AuthProvider: the delivery address list is per-user. */}
             <DeliveryProvider>
-              <NavigationContainer theme={navTheme}>
+              {/* ref + onReady let NotificationProvider — which sits above this
+                  container and so has no useNavigation() — open the screen a
+                  tapped push points at, including one that cold-started the app
+                  before this mounted. */}
+              <NavigationContainer
+                ref={navigationRef}
+                theme={navTheme}
+                onReady={flushPendingNavigation}
+              >
                 <RootNavigator />
               </NavigationContainer>
             </DeliveryProvider>

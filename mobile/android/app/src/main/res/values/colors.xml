@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The tint Android paints ic_notification with, and the accent on the
+         notification itself. Matches theme.colors.primary in the JS side. -->
+    <color name="notification_accent">#16A34A</color>
+</resources>

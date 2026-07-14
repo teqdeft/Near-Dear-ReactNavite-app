@@ -3,11 +3,12 @@ const config = require('../config');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { notify } = require('../services/notificationService');
+const { notify, notifyMany } = require('../services/notificationService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesOverlap } = require('../utils/cityMatch');
 const { distanceKm, toCoord } = require('../utils/geo');
 const { renameUpload } = require('../utils/fileNaming');
+const { AMBULANCE_STATUS_COPY } = require('../utils/notificationCopy');
 const {
   AMBULANCE_STATUS, NOTIFICATION_TYPE, ROLES, USER_STATUS,
   AMBULANCE_APPROVAL, AMBULANCE_DOC_TYPE, DOC_STATUS, AMBULANCE_TYPE,
@@ -88,12 +89,14 @@ const uploadVehicleDocument = asyncHandler(async (req, res) => {
   const [{ c: docCount }] = await db('ambulance_documents').where({ ambulance_id: vehicle.id }).count('* as c');
   if (Number(docCount) === 1) {
     const admins = await db('users').where({ role: ROLES.ADMIN }).select('id');
-    await Promise.all(admins.map((a) => notify(a.id, {
-      title: 'New ambulance registration',
-      message: `A driver registered vehicle ${vehicle.vehicle_number} — awaiting approval.`,
+    // No city here: `ambulances` has no city column — a driver's coverage lives on
+    // their profile, not the vehicle.
+    await notifyMany(admins.map((a) => a.id), {
+      title: '📋 New ambulance awaiting approval',
+      message: `${vehicle.vehicle_number} (${vehicle.ambulance_type || 'basic'}) was registered. Review the documents to approve it — the driver cannot take rides until you do.`,
       type: NOTIFICATION_TYPE.ADMIN,
       referenceId: vehicle.id,
-    })));
+    });
   }
 
   const doc = await db('ambulance_documents').where({ id }).first();
@@ -250,19 +253,39 @@ const createRequest = asyncHandler(async (req, res) => {
     findNearbyDrivers(b.city, { latitude: b.pickup_latitude, longitude: b.pickup_longitude }),
     db('users').where({ role: ROLES.ADMIN }).select('id'),
   ]);
+  const ambType = b.ambulance_type && b.ambulance_type !== 'any' ? `${b.ambulance_type.toUpperCase()} ambulance` : 'ambulance';
   await Promise.all([
-    ...drivers.map((d) => notify(d.id, {
-      title: 'New ambulance request near you',
-      message: `${b.patient_name} needs a ${b.ambulance_type || 'any'} ambulance${b.city ? ' in ' + b.city : ''}. Tap to accept.`,
+    // A driver decides from the lock screen whether this ride is theirs, so the
+    // pickup address goes in — it is the one fact that settles it. Without it they
+    // must open the app just to find out the pickup is across town.
+    notifyMany(drivers.map((d) => d.id), {
+      title: '🚨 New ambulance request near you',
+      message: `${b.patient_name} needs an ${ambType}. Pickup: ${b.pickup_address}${b.city ? `, ${b.city}` : ''}. Tap to accept.`,
       type: NOTIFICATION_TYPE.AMBULANCE,
       referenceId: id,
-    })),
-    ...admins.map((a) => notify(a.id, {
-      title: 'New ambulance request',
-      message: `${b.patient_name} needs an ambulance (${b.ambulance_type || 'any'}).`,
+    }),
+    notifyMany(admins.map((a) => a.id), {
+      title: '🚨 New ambulance request',
+      message: `${b.patient_name} needs an ${ambType} at ${b.pickup_address}${b.city ? `, ${b.city}` : ''}. ${drivers.length} driver${drivers.length === 1 ? '' : 's'} notified.`,
       type: NOTIFICATION_TYPE.AMBULANCE,
       referenceId: id,
-    })),
+    }),
+    // The requester is in an emergency and is about to stare at the screen. Say
+    // whether help is actually coming — and if no driver was reachable, say THAT,
+    // loudly, so they call 108 instead of waiting on a dispatch that isn't coming.
+    notify(req.user.id, drivers.length
+      ? {
+        title: `🚑 ${drivers.length} driver${drivers.length > 1 ? 's' : ''} alerted`,
+        message: `We've alerted ${drivers.length} nearby ambulance driver${drivers.length > 1 ? 's' : ''}. You'll be notified the moment one accepts — keep your phone reachable on ${b.contact_mobile}.`,
+        type: NOTIFICATION_TYPE.AMBULANCE,
+        referenceId: id,
+      }
+      : {
+        title: '⚠️ No drivers available right now',
+        message: 'No ambulance driver is on duty near you at the moment. Our team has been alerted and will assign one manually — but if this is life-threatening, please call 108 now.',
+        type: NOTIFICATION_TYPE.AMBULANCE,
+        referenceId: id,
+      }),
   ]);
 
   const request = await db('ambulance_requests').where({ id }).first();
@@ -308,6 +331,20 @@ const cancelRequest = asyncHandler(async (req, res) => {
   if (r.assigned_ambulance_id) {
     await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
   }
+
+  // A driver who has already accepted is, right now, driving to a pickup that no
+  // longer exists. Freeing their ambulance row above lets the SYSTEM give them
+  // work again, but says nothing to the DRIVER — without this they arrive at the
+  // address and find nobody there.
+  if (r.assigned_driver_id) {
+    await notify(r.assigned_driver_id, {
+      title: '🚫 Ride cancelled',
+      message: `${r.patient_name} cancelled the pickup at ${r.pickup_address}. Please stand down — you're free to accept new requests.`,
+      type: NOTIFICATION_TYPE.AMBULANCE,
+      referenceId: r.id,
+    });
+  }
+
   return ok(res, null, 'Request cancelled');
 });
 
@@ -475,9 +512,13 @@ const acceptRequest = asyncHandler(async (req, res) => {
     await db('ambulances').where({ id: amb.id }).update({ status: 'busy' });
   }
 
+  // Who is coming, in what, and on what number. A requester in an emergency should
+  // not have to open an app to find the driver's phone number — this notification
+  // is very likely the only thing they will look at.
+  const driver = await db('users').where({ id: req.user.id }).first();
   await notify(request.user_id, {
-    title: 'Ambulance accepted 🚑',
-    message: 'A driver accepted your request and will call you shortly.',
+    title: '🚑 Ambulance accepted!',
+    message: `${driver?.name || 'A driver'} is coming for ${request.patient_name}${amb?.vehicle_number ? ` in ${amb.vehicle_number}` : ''}.${driver?.mobile ? ` Call them on ${driver.mobile}.` : ''} Track the ambulance live in the app.`,
     type: NOTIFICATION_TYPE.AMBULANCE,
     referenceId: Number(id),
   });
@@ -560,12 +601,10 @@ const updateStatus = asyncHandler(async (req, res) => {
     await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
   }
 
-  await notify(r.user_id, {
-    title: 'Ambulance update',
-    message: `Your ambulance request is now: ${status.replace(/_/g, ' ')}.`,
-    type: NOTIFICATION_TYPE.AMBULANCE,
-    referenceId: r.id,
-  });
+  const copy = AMBULANCE_STATUS_COPY[status];
+  if (copy) {
+    await notify(r.user_id, { ...copy(r), type: NOTIFICATION_TYPE.AMBULANCE, referenceId: r.id });
+  }
   return ok(res, { status }, 'Status updated');
 });
 

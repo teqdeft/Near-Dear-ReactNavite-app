@@ -53,7 +53,7 @@ export default function CreateBloodRequestScreen({ navigation }) {
   if (!aadhaarVerified) return <KycGate navigation={navigation} action="request blood" />;
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={[]}>
       <SectionTitle>Patient & blood needed</SectionTitle>
       <TextField label="Patient name *" value={form.patient_name} onChangeText={(v) => set('patient_name', v)} />
       <View style={styles.row}>

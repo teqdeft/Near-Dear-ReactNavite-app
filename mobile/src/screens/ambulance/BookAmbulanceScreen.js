@@ -6,6 +6,9 @@ import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
 import LocationPicker from '../../components/LocationPicker';
 import KycGate from '../../components/KycGate';
+// [AI] Speak-to-book is built but switched off — the keyboard's mic is too hard to
+// find for it to demo well. Uncomment this and the card below to turn it back on.
+// import VoiceBookingCard from '../../components/VoiceBookingCard';
 import { colors, spacing } from '../../theme';
 
 const TYPES = [
@@ -53,6 +56,10 @@ export default function BookAmbulanceScreen({ navigation }) {
 
   return (
     <Screen scroll edges={[]}>
+      {/* [AI] off for now — see the commented import above.
+      <VoiceBookingCard onParsed={(fields) => setForm((f) => ({ ...f, ...fields }))} />
+      */}
+
       <SectionTitle>Patient & contact</SectionTitle>
       <TextField label="Patient name *" value={form.patient_name} onChangeText={(v) => set('patient_name', v)} />
       <TextField label="Contact mobile *" keyboardType="number-pad" maxLength={10} value={form.contact_mobile} onChangeText={(v) => set('contact_mobile', v)} />

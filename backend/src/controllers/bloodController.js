@@ -2,16 +2,41 @@ const db = require('../db/knex');
 const { ok, created } = require('../utils/response');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { notify } = require('../services/notificationService');
+const { notify, notifyMany } = require('../services/notificationService');
 const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const { requireKyc } = require('../utils/requireKyc');
 const { citiesOverlap, cityOverlapRaw, normalizeCityList } = require('../utils/cityMatch');
 const {
   ROLES, USER_STATUS, DONOR_STATUS, BLOOD_REQUEST_STATUS, MATCH_RESPONSE, NOTIFICATION_TYPE,
 } = require('../constants/enums');
+const { URGENCY_PREFIX } = require('../utils/notificationCopy');
 
 // Requests still looking for donors.
 const ACTIVE_REQUEST_STATUSES = [BLOOD_REQUEST_STATUS.OPEN, BLOOD_REQUEST_STATUS.MATCHED];
+
+/**
+ * What a donor is shown when a request matches them — from a new request, or from
+ * their own availability turning back on. Both must read identically: the donor
+ * cannot tell (and should not care) which of the two brought it to them.
+ *
+ * A donor decides whether to act straight from the lock screen, so the blood group
+ * and the hospital go in — the two facts that settle "is this me, and can I get
+ * there". Units and the deadline follow, because "1 unit by tonight" and "4 units
+ * by Friday" are different asks.
+ */
+function donorRequestCopy(r) {
+  const units = Number(r.units_required || 1);
+  const by = r.required_at
+    ? ` by ${new Date(r.required_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+    : '';
+
+  return {
+    title: `${URGENCY_PREFIX[r.urgency_level] || '🩸'} ${r.blood_group_required} blood needed`,
+    message: `${units} unit${units > 1 ? 's' : ''} needed at ${r.hospital_name}, ${r.city}${by}. Tap to respond.`,
+    type: NOTIFICATION_TYPE.BLOOD,
+    referenceId: r.id,
+  };
+}
 
 // Backfill: when a donor becomes available (freshly registered or toggles ON),
 // hook them up to blood requests that are still open in their city + group but
@@ -51,12 +76,7 @@ async function matchOpenRequestsToDonor(donor) {
 
   const openIds = requests.filter((r) => r.status === BLOOD_REQUEST_STATUS.OPEN).map((r) => r.id);
   await Promise.all([
-    ...requests.map((r) => notify(donor.user_id, {
-      title: 'Blood request near you',
-      message: `${r.blood_group_required} needed at ${r.hospital_name}, ${r.city}.`,
-      type: NOTIFICATION_TYPE.BLOOD,
-      referenceId: r.id,
-    })),
+    ...requests.map((r) => notify(donor.user_id, donorRequestCopy(r))),
     openIds.length
       ? db('blood_requests').whereIn('id', openIds).update({ status: BLOOD_REQUEST_STATUS.MATCHED })
       : Promise.resolve(),
@@ -68,7 +88,7 @@ async function matchOpenRequestsToDonor(donor) {
 async function notifyMatchedDonors(requestId, payload) {
   const matches = await db('blood_request_matches')
     .where({ blood_request_id: requestId }).select('donor_user_id');
-  await Promise.all(matches.map((m) => notify(m.donor_user_id, payload)));
+  await notifyMany(matches.map((m) => m.donor_user_id), payload);
 }
 
 // Shared accept/decline logic for a match row (used by both the match-id and
@@ -91,8 +111,11 @@ async function applyMatchResponse({ match, request, action, userId, res }) {
     });
     const donorUser = await db('users').where({ id: userId }).first();
     await notify(request.requester_id, {
-      title: 'A donor accepted your blood request',
-      message: `${donorUser.name || 'A donor'} accepted. You can now contact each other.`,
+      title: '🎉 A donor accepted!',
+      // The donor's number is the whole point of this notification — the requester
+      // is standing in a hospital and needs to call someone, not navigate an app to
+      // find out they can.
+      message: `${donorUser.name || 'A donor'} accepted your ${request.blood_group_required} request at ${request.hospital_name}.${donorUser.mobile ? ` Call them on ${donorUser.mobile}.` : ' Open the app to see their contact.'}`,
       // Requester-facing type so the app opens their request detail, not the
       // donor "requests for me" list (the requester may also be a donor).
       type: NOTIFICATION_TYPE.BLOOD_ACCEPTED,
@@ -240,6 +263,15 @@ const createRequest = asyncHandler(async (req, res) => {
     .whereIn('user_id', db('users').where({ status: USER_STATUS.ACTIVE }).select('id'));
   const donors = candidates.filter((d) => citiesOverlap(b.city, d.city));
 
+  // Read the row back rather than notifying from req.body. donorRequestCopy formats
+  // `required_at`, and the two are not the same value: the driver hands back a Date
+  // it parsed in the connection's timezone, while req.body carries whatever string
+  // the client posted — an ISO 'Z' string would be re-parsed as UTC and rendered
+  // hours off. Since the backfill path (matchDonorToOpenRequests) always passes a
+  // row, notifying from the body here would give two donors two different deadlines
+  // for the same request.
+  const created = await db('blood_requests').where({ id }).first();
+
   if (donors.length) {
     // Batch the match inserts + notifications instead of a serial round-trip
     // per donor (this is a time-critical path on an emergency request).
@@ -250,14 +282,27 @@ const createRequest = asyncHandler(async (req, res) => {
       notification_sent: true,
       response_status: MATCH_RESPONSE.PENDING,
     })));
-    await Promise.all(donors.map((donor) => notify(donor.user_id, {
-      title: 'Urgent blood request near you',
-      message: `${b.blood_group_required} needed at ${b.hospital_name}, ${b.city}.`,
-      type: NOTIFICATION_TYPE.BLOOD,
-      referenceId: id,
-    })));
+    await notifyMany(donors.map((d) => d.user_id), donorRequestCopy(created));
     await db('blood_requests').where({ id }).update({ status: BLOOD_REQUEST_STATUS.MATCHED });
   }
+
+  // Tell the requester what actually happened to their request. The API response
+  // already says this, but they are about to close the app and wait — and the
+  // no-donors case especially must not be silent: someone waiting at a hospital
+  // for a match that was never sent needs to know to try another channel.
+  await notify(userId, donors.length
+    ? {
+      title: `✅ ${donors.length} donor${donors.length > 1 ? 's' : ''} notified`,
+      message: `Your ${b.blood_group_required} request at ${b.hospital_name} is live. We've alerted ${donors.length} matching donor${donors.length > 1 ? 's' : ''} nearby — we'll notify you the moment someone accepts.`,
+      type: NOTIFICATION_TYPE.BLOOD_ACCEPTED,
+      referenceId: id,
+    }
+    : {
+      title: '⏳ No matching donors yet',
+      message: `Your ${b.blood_group_required} request at ${b.hospital_name} is live, but no available donors match right now. We'll alert them the moment one becomes available — please arrange a backup too.`,
+      type: NOTIFICATION_TYPE.BLOOD_ACCEPTED,
+      referenceId: id,
+    });
 
   const request = await db('blood_requests').where({ id }).first();
   return created(res, { request, matchedDonors: donors.length }, `Request created. ${donors.length} donor(s) notified.`);
@@ -309,8 +354,8 @@ const cancelRequest = asyncHandler(async (req, res) => {
   });
   // Let matched donors know it's closed so it clears from their list.
   await notifyMatchedDonors(request.id, {
-    title: 'Blood request cancelled',
-    message: `The ${request.blood_group_required} request at ${request.hospital_name} was cancelled.`,
+    title: '🚫 Blood request cancelled',
+    message: `The ${request.blood_group_required} request at ${request.hospital_name}, ${request.city} was cancelled. No action needed — thank you for being available.`,
     type: NOTIFICATION_TYPE.BLOOD,
     referenceId: request.id,
   });
@@ -328,8 +373,8 @@ const fulfillRequest = asyncHandler(async (req, res) => {
   await db('blood_requests').where({ id: request.id }).update({ status: BLOOD_REQUEST_STATUS.FULFILLED });
   // Reflect on the donor side + thank everyone who was matched.
   await notifyMatchedDonors(request.id, {
-    title: 'Blood request fulfilled',
-    message: `The ${request.blood_group_required} request at ${request.hospital_name} has been fulfilled. Thank you for your support!`,
+    title: '❤️ Blood request fulfilled',
+    message: `The ${request.blood_group_required} request at ${request.hospital_name} has been fulfilled. Thank you for stepping up — you helped save a life.`,
     type: NOTIFICATION_TYPE.BLOOD,
     referenceId: request.id,
   });

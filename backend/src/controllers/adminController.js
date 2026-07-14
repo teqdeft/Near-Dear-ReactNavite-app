@@ -147,11 +147,12 @@ const reviewPharmacy = asyncHandler(async (req, res) => {
     });
   }
   await logAction(req.user.id, { action: `pharmacy_${status}`, entityType: 'pharmacy', entityId: pharmacy.id, oldValue: { status: pharmacy.approval_status }, newValue: { status }, ip: ip(req) });
+  const approved = status === PHARMACY_APPROVAL.APPROVED;
   await notify(pharmacy.owner_user_id, {
-    title: `Pharmacy ${status}`,
-    message: status === PHARMACY_APPROVAL.APPROVED
-      ? 'Your pharmacy is approved. You can now list medicines.'
-      : `Your pharmacy was ${status}. ${reason || ''}`.trim(),
+    title: approved ? '🎉 Pharmacy approved!' : '❌ Pharmacy not approved',
+    message: approved
+      ? `${pharmacy.pharmacy_name} is verified and live on NearDear. You can now list medicines and start receiving orders.`
+      : `${pharmacy.pharmacy_name} could not be approved.${reason ? ` Reason: ${reason}.` : ''} Fix the issue and re-submit your documents from the app.`,
     type: NOTIFICATION_TYPE.ADMIN,
     referenceId: pharmacy.id,
   });
@@ -219,11 +220,12 @@ const reviewAmbulanceVehicle = asyncHandler(async (req, res) => {
   });
   await logAction(req.user.id, { action: `ambulance_${status}`, entityType: 'ambulance', entityId: vehicle.id, oldValue: { status: vehicle.approval_status }, newValue: { status }, ip: ip(req) });
   if (vehicle.driver_user_id) {
+    const ok_ = status === AMBULANCE_APPROVAL.APPROVED;
     await notify(vehicle.driver_user_id, {
-      title: `Ambulance ${status}`,
-      message: status === AMBULANCE_APPROVAL.APPROVED
-        ? 'Your ambulance is approved. You can now accept rides.'
-        : `Your ambulance was rejected. ${reason || ''}`.trim(),
+      title: ok_ ? '🎉 Ambulance approved!' : '❌ Ambulance not approved',
+      message: ok_
+        ? `${vehicle.vehicle_number} is verified. Go on duty in the app to start receiving ride requests near you.`
+        : `${vehicle.vehicle_number} could not be approved.${reason ? ` Reason: ${reason}.` : ''} Re-upload your documents from the app to try again.`,
       type: NOTIFICATION_TYPE.ADMIN,
       referenceId: vehicle.id,
     });
@@ -289,10 +291,12 @@ const reviewAadhaarSubmission = asyncHandler(async (req, res) => {
     oldValue: { status: submission.status }, newValue: { status }, ip: ip(req),
   });
   await notify(submission.user_id, {
-    title: status === 'approved' ? 'Aadhaar verified' : 'Aadhaar verification failed',
+    title: status === 'approved' ? '✅ Aadhaar verified' : '❌ Aadhaar verification failed',
     message: status === 'approved'
-      ? 'Your Aadhaar has been verified successfully. Your account is now verified.'
-      : `Your Aadhaar verification was rejected. ${reason || 'Please re-upload clear photos of your Aadhaar card.'}`.trim(),
+      // Say what it UNLOCKS. "Your account is now verified" is a status; the user
+      // wants to know what they can finally do.
+      ? 'Your identity is verified. You can now request blood, book an ambulance and order medicines on NearDear.'
+      : `Your Aadhaar could not be verified. ${reason || 'The photos were unclear.'} Please re-upload clear, well-lit photos of both sides from the app.`,
     type: NOTIFICATION_TYPE.ADMIN,
     referenceId: submission.id,
   });
@@ -354,12 +358,13 @@ const assignAmbulance = asyncHandler(async (req, res) => {
   }
 
   let driverId = driver_user_id || null;
+  let ambulance = null;
   if (ambulance_id) {
-    const amb = await db('ambulances').where({ id: ambulance_id }).first();
-    if (!amb) throw ApiError.notFound('Ambulance not found');
+    ambulance = await db('ambulances').where({ id: ambulance_id }).first();
+    if (!ambulance) throw ApiError.notFound('Ambulance not found');
     // Don't hand out an ambulance that's already on another trip.
-    if (amb.status === 'busy') throw ApiError.conflict('That ambulance is already busy on another trip.');
-    if (!driverId) driverId = amb.driver_user_id;
+    if (ambulance.status === 'busy') throw ApiError.conflict('That ambulance is already busy on another trip.');
+    if (!driverId) driverId = ambulance.driver_user_id;
   }
 
   // A driver can run only one trip at a time — reject if they're already busy
@@ -381,16 +386,19 @@ const assignAmbulance = asyncHandler(async (req, res) => {
   if (ambulance_id) await db('ambulances').where({ id: ambulance_id }).update({ status: 'busy' });
 
   await logAction(req.user.id, { action: 'ambulance_assigned', entityType: 'ambulance_request', entityId: r.id, newValue: { ambulance_id, driverId }, ip: ip(req) });
+  // Who is coming and on what number — the requester is in an emergency and this
+  // notification is very likely the only thing they will read.
+  const driver = driverId ? await db('users').where({ id: driverId }).first() : null;
   await notify(r.user_id, {
-    title: 'Ambulance assigned',
-    message: 'An ambulance has been assigned to your request.',
+    title: '🚑 Ambulance assigned',
+    message: `${driver?.name || 'A driver'} has been assigned to ${r.patient_name}${ambulance?.vehicle_number ? ` (${ambulance.vehicle_number})` : ''}.${driver?.mobile ? ` Call them on ${driver.mobile}.` : ''} Track the ambulance live in the app.`,
     type: NOTIFICATION_TYPE.AMBULANCE,
     referenceId: r.id,
   });
   if (driverId) {
     await notify(driverId, {
-      title: 'New ambulance assignment',
-      message: `You have been assigned to pick up ${r.patient_name}.`,
+      title: '🚨 You have been assigned a ride',
+      message: `Pick up ${r.patient_name} at ${r.pickup_address}${r.city ? `, ${r.city}` : ''}.${r.contact_mobile ? ` Call them on ${r.contact_mobile}.` : ''} Open the app for directions.`,
       type: NOTIFICATION_TYPE.AMBULANCE,
       referenceId: r.id,
     });

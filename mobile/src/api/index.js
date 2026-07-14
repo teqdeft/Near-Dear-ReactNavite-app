@@ -97,6 +97,9 @@ export const NotificationApi = {
   unreadCount: () => data(client.get('/notifications/unread-count')),
   markRead: (id) => full(client.put(`/notifications/${id}/read`)),
   markAllRead: () => full(client.put('/notifications/read-all')),
+  // The FCM address of this device, so the backend has somewhere to push to.
+  registerDevice: (token, platform) => full(client.post('/notifications/device-token', { token, platform })),
+  unregisterDevice: (token) => full(client.delete('/notifications/device-token', { data: { token } })),
 };
 
 export const SupportApi = {

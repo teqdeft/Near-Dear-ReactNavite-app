@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CatalogApi } from '../../api';
 import { useCart } from '../../store/CartContext';
@@ -20,6 +20,7 @@ export default function PharmacyHomeScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState(null); // null = no active search
   const [searching, setSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { count } = useCart();
   const { addressId } = useDelivery();
 
@@ -27,6 +28,7 @@ export default function PharmacyHomeScreen({ navigation }) {
     try { setCategories((await CatalogApi.categories()) || []); } catch (e) { setCategories([]); }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   // Live search: as the user types, fetch matching medicines ~300ms after they
   // stop and show them in a dropdown below the search bar — no search key needed.
@@ -58,7 +60,8 @@ export default function PharmacyHomeScreen({ navigation }) {
 
   return (
     <GradientBackground>
-    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.pharmacy} colors={[colors.pharmacy]} />}>
       {/* The delivery address decides which pharmacies exist for this user, so
           it sits above the search rather than hidden away in checkout. */}
       <View style={{ marginBottom: spacing.md }}>

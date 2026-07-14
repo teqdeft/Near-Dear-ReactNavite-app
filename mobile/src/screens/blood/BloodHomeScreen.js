@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
@@ -24,11 +24,13 @@ function ActionCard({ icon, title, subtitle, onPress, color = colors.blood }) {
 export default function BloodHomeScreen({ navigation }) {
   const [donor, setDonor] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try { setDonor(await BloodApi.myDonor()); } catch (e) { /* ignore */ }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const toggleAvailability = async (value) => {
     setBusy(true);
@@ -40,7 +42,8 @@ export default function BloodHomeScreen({ navigation }) {
 
   return (
     <GradientBackground>
-    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blood} colors={[colors.blood]} />}>
       <View style={[styles.hero, shadow.card]}>
         <Icon name="blood" size={40} color={colors.white} />
         <Text style={styles.heroTitle}>Give blood, save lives</Text>
