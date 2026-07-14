@@ -8,6 +8,8 @@ router.use(authenticate);
 // Notifications
 router.get('/notifications', notifications.list);
 router.get('/notifications/unread-count', notifications.unreadCount);
+router.post('/notifications/device-token', notifications.registerDevice);
+router.delete('/notifications/device-token', notifications.unregisterDevice);
 router.put('/notifications/read-all', notifications.markAllRead);
 router.put('/notifications/:id/read', notifications.markRead);
 

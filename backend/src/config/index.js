@@ -66,6 +66,16 @@ const config = {
     dir: str(process.env.UPLOAD_DIR, 'uploads'),
     maxMb: num(process.env.MAX_UPLOAD_MB, 10),
   },
+
+  // Push notifications (FCM). The service-account JSON is base64'd into a single
+  // env var because its private_key is multi-line and .env cannot hold newlines.
+  //
+  // Blank is a supported state, not a misconfiguration: push is simply skipped
+  // and notifications remain in-app only. A contributor without Firebase access
+  // can still run the whole app.
+  firebase: {
+    serviceAccountBase64: str(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, ''),
+  },
 };
 
 module.exports = config;

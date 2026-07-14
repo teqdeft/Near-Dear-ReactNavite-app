@@ -1,6 +1,7 @@
 const db = require('../db/knex');
 const { ok } = require('../utils/response');
 const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
 // GET /notifications
 const list = asyncHandler(async (req, res) => {
@@ -28,4 +29,47 @@ const markAllRead = asyncHandler(async (req, res) => {
   return ok(res, null, 'All marked read');
 });
 
-module.exports = { list, unreadCount, markRead, markAllRead };
+// POST /notifications/device-token  — the app hands us the FCM address of the
+// device it is running on, so push has somewhere to go.
+//
+// Called on every launch, not just at login: Firebase rotates tokens on its own
+// schedule, and a token we were never told about is a phone that silently stops
+// receiving alerts. Re-registering the same token is therefore the normal case,
+// not an error — hence the upsert.
+const registerDevice = asyncHandler(async (req, res) => {
+  const token = String(req.body.token || '').trim();
+  const platform = String(req.body.platform || '').trim().toLowerCase();
+
+  if (!token) throw ApiError.badRequest('token is required');
+  if (!['android', 'ios'].includes(platform)) throw ApiError.badRequest('platform must be android or ios');
+
+  // Conflict on `token`, not on (user_id, token): the token belongs to the
+  // installation, so if someone else was previously signed in on this phone the
+  // row must transfer to the current user. Without the user_id overwrite the
+  // previous user would keep getting this phone's notifications.
+  await db('device_tokens')
+    .insert({
+      user_id: req.user.id, token, platform, updated_at: db.fn.now(),
+    })
+    .onConflict('token')
+    .merge(['user_id', 'platform', 'updated_at']);
+
+  return ok(res, null, 'Device registered');
+});
+
+// DELETE /notifications/device-token  — on logout, so the next person to use this
+// phone does not receive the previous user's alerts.
+const unregisterDevice = asyncHandler(async (req, res) => {
+  const token = String(req.body.token || '').trim();
+  if (!token) throw ApiError.badRequest('token is required');
+
+  // Scoped to the caller: a token is not a secret (the app that holds it can read
+  // it), so without the user_id check anyone could unregister anyone's device.
+  await db('device_tokens').where({ token, user_id: req.user.id }).del();
+
+  return ok(res, null, 'Device unregistered');
+});
+
+module.exports = {
+  list, unreadCount, markRead, markAllRead, registerDevice, unregisterDevice,
+};

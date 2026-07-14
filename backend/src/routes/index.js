@@ -10,6 +10,9 @@ const orderRoutes = require('./orderRoutes');
 const pharmacyRoutes = require('./pharmacyRoutes');
 const adminRoutes = require('./adminRoutes');
 const miscRoutes = require('./miscRoutes');
+// [AI] Speak-to-book is built but switched off. Uncomment this and the mount below
+// to turn it back on. See src/services/aiService.js.
+// const aiRoutes = require('./aiRoutes');
 const fileController = require('../controllers/fileController');
 
 router.use('/auth', authRoutes);
@@ -20,6 +23,8 @@ router.use('/catalog', catalogRoutes);
 router.use('/orders', orderRoutes);
 router.use('/pharmacy', pharmacyRoutes);
 router.use('/admin', adminRoutes);
+// [AI] off for now — see the commented require above.
+// router.use('/ai', aiRoutes);
 router.use('/', miscRoutes); // notifications + support
 
 // Private file serving (authenticated).
