@@ -64,11 +64,19 @@ export default function LocationPicker({
    */
   const armed = useRef(!!value);
 
+  // Open the map on the right spot from the very first frame instead of relying
+  // on animateToRegion after mount. On a fresh mount react-native-maps ignores
+  // animateToRegion until the native view is ready, so a city picked BEFORE the
+  // picker exists (the delivery-address flow) would leave the map stuck on the
+  // India-centroid fallback and never jump to the city. Prefer the saved pin,
+  // then the picked city centre, then the fallback.
+  const start = value ?? center ?? FALLBACK;
+  const startDelta = value ? 0.01 : center ? 0.08 : 0.01;
   const initialRegion = {
-    latitude: value?.latitude ?? FALLBACK.latitude,
-    longitude: value?.longitude ?? FALLBACK.longitude,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
+    latitude: start.latitude,
+    longitude: start.longitude,
+    latitudeDelta: startDelta,
+    longitudeDelta: startDelta,
   };
 
   const locateMe = async () => {

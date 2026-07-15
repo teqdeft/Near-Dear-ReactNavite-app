@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
 import Icon from './Icon';
 import CitySuggestList from './CitySuggestList';
+import { useKeyboardAwareFocus } from './UI';
 import { suggestCities, isKnownCity } from '../constants/cities';
 import { colors, spacing, font, radius } from '../theme';
 
@@ -24,6 +25,7 @@ export default function CityPicker({
 }) {
   // Suggestions only after the user types — not while showing a prefilled value.
   const [touched, setTouched] = useState(false);
+  const { inputRef, onFocus } = useKeyboardAwareFocus();
   const query = (value || '').trim();
   const known = isKnownCity(query);
 
@@ -43,8 +45,10 @@ export default function CityPicker({
       <View style={[styles.inputWrap, known && { borderColor: color }]}>
         <Icon name="location" size={19} color={known ? color : colors.textMuted} style={styles.leftIcon} />
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={change}
+          onFocus={onFocus}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           autoCorrect={false}

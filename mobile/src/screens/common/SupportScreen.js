@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SupportApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
-import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle, Chip } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle, Chip, Screen } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
 import { colors, spacing, font } from '../../theme';
 
@@ -46,7 +46,7 @@ export default function SupportScreen() {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}
+    <Screen scroll edges={[]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       <SectionTitle>Raise a ticket</SectionTitle>
       <Text style={styles.label}>Topic</Text>
@@ -70,7 +70,7 @@ export default function SupportScreen() {
           {t.created_at ? <Muted style={{ marginTop: 4 }}>Raised: {formatDateTime(t.created_at)}</Muted> : null}
         </Card>
       ))}
-    </ScrollView>
+    </Screen>
   );
 }
 

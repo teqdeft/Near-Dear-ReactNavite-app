@@ -53,13 +53,22 @@ export default function BloodHomeScreen({ navigation }) {
       {donor && (
         <Card style={styles.donorCard}>
           <Row style={{ justifyContent: 'space-between' }}>
-            <Row>
+            <Row style={{ flex: 1 }}>
               <IconBadge name="donor" color={colors.blood} size={42} iconSize={22} />
-              <View style={{ marginLeft: spacing.md }}>
+              <View style={{ marginLeft: spacing.md, flex: 1 }}>
                 <Text style={styles.donorTitle}>Registered donor</Text>
-                <Row style={{ marginTop: 4 }}>
-                  <Pill label={donor.blood_group} color={colors.blood} />
-                  <Pill label={donor.city} color={colors.primary} style={{ marginLeft: 6 }} icon="location" />
+                {/* One pill per city, wrapping to new lines — all the cities the
+                    donor added stay visible inside the card, however many. */}
+                <Row style={{ marginTop: 4, flexWrap: 'wrap' }}>
+                  <Pill label={donor.blood_group} color={colors.blood} style={{ marginBottom: 4 }} />
+                  {String(donor.city || '')
+                    .split(',')
+                    .map((c) => c.trim())
+                    .filter(Boolean)
+                    .map((c, i) => (
+                      <Pill key={c} label={c} color={colors.primary} icon={i === 0 ? 'location' : undefined}
+                        style={{ marginLeft: 6, marginBottom: 4 }} />
+                    ))}
                 </Row>
               </View>
             </Row>

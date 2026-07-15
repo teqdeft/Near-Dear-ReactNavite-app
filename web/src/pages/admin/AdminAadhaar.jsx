@@ -4,6 +4,7 @@ import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
+import { API_BASE_URL } from '../../config';
 
 const FILTERS = ['pending', 'approved', 'rejected', ''];
 
@@ -75,7 +76,7 @@ function Review({ id, onChanged, onClose }) {
   const viewImg = async (side) => {
     try {
       const rel = side === 'front' ? s.front_url : s.back_url;
-      const absolute = `${location.protocol}//${location.hostname}:4000/api/v1/files/${rel}`;
+      const absolute = `${API_BASE_URL}/files/${rel}`;
       const objectUrl = await fetchFileObjectUrl(absolute);
       setImgUrls((u) => ({ ...u, [side]: objectUrl }));
     } catch (e) { setError(errMessage(e)); }

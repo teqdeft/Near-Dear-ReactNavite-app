@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Icon from './Icon';
 import CitySuggestList from './CitySuggestList';
+import { useKeyboardAwareFocus } from './UI';
 import { suggestCities } from '../constants/cities';
 import { colors, spacing, font, radius } from '../theme';
 
@@ -41,6 +42,7 @@ export default function CityChipsInput({
 }) {
   const cities = parseCities(value);
   const [draft, setDraft] = useState('');
+  const { inputRef, onFocus } = useKeyboardAwareFocus();
   const full = cities.length >= max;
 
   // Suggest canonical spellings, minus the ones already added. Matching is by
@@ -70,8 +72,10 @@ export default function CityChipsInput({
         <View style={styles.inputWrap}>
           <Icon name="location" size={19} color={colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
+            ref={inputRef}
             value={draft}
             onChangeText={setDraft}
+            onFocus={onFocus}
             // Wrapped: both handlers pass an event, which add() would take as the city.
             onSubmitEditing={() => add()}
             placeholder={full ? `Up to ${max} cities` : placeholder}

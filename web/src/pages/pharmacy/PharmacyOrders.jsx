@@ -5,6 +5,7 @@ import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, money, ErrorState, ReasonModal, Pagination } from '../../components/UI';
 import Icon from '../../components/Icon';
+import { API_BASE_URL } from '../../config';
 
 const PAGE_SIZE = 20;
 
@@ -147,7 +148,9 @@ function OrderDetail({ id, onChanged, onClose }) {
   };
 
   const viewPrescription = async () => {
-    try { setRxUrl(await fetchFileObjectUrl(prescription.url)); }
+    // Build from the web app's own API base (dev → localhost, prod → Vercel)
+    // instead of the backend's `url`, which hardcodes whatever APP_URL is set to.
+    try { setRxUrl(await fetchFileObjectUrl(`${API_BASE_URL}/files/${prescription.file_url}`)); }
     catch (e) { setError(errMessage(e)); }
   };
 

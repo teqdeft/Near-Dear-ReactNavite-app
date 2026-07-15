@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDelivery } from '../store/DeliveryContext';
 import { errMessage } from '../api/client';
-import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle } from './UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle, Screen } from './UI';
 import LocationPicker from './LocationPicker';
 import CityPicker from './CityPicker';
 import Icon from './Icon';
@@ -11,6 +11,7 @@ import { cityCoords } from '../constants/cities';
 import { colors, spacing, font, radius } from '../theme';
 
 const EMPTY = { name: 'Home', address_line_1: '', city: '', pincode: '', latitude: null, longitude: null };
+const HIT = { top: 8, bottom: 8, left: 8, right: 8 };
 
 /**
  * "Deliver to <address>" bar for the pharmacy screens.
@@ -21,7 +22,7 @@ const EMPTY = { name: 'Home', address_line_1: '', city: '', pincode: '', latitud
  * which is exactly what someone ordering for their parents in another city needs.
  */
 export default function DeliverToBar() {
-  const { address, addresses, setAddressId, add } = useDelivery();
+  const { address, addresses, setAddressId, add, update, remove } = useDelivery();
   const [open, setOpen] = useState(false);
 
   return (
@@ -45,6 +46,8 @@ export default function DeliverToBar() {
           selectedId={address?.id}
           onSelect={(id) => { setAddressId(id); setOpen(false); }}
           onAdd={add}
+          onUpdate={update}
+          onRemove={remove}
           onClose={() => setOpen(false)}
         />
       </Modal>
@@ -53,10 +56,12 @@ export default function DeliverToBar() {
 }
 
 // The picker sheet: choose an existing address, or pin a new one.
-function AddressSheet({ addresses, selectedId, onSelect, onAdd, onClose }) {
+function AddressSheet({ addresses, selectedId, onSelect, onAdd, onUpdate, onRemove, onClose }) {
   const [adding, setAdding] = useState(addresses.length === 0);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  // null = the form is adding a new address; an id = editing that address.
+  const [editingId, setEditingId] = useState(null);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   // Changing the city invalidates any pin already dropped — a house in Mohali
@@ -69,18 +74,53 @@ function AddressSheet({ addresses, selectedId, onSelect, onAdd, onClose }) {
   // pharmacies are matched on the city NAME instead of distance.
   const cityCentre = cityCoords(form.city);
 
+  const resetForm = () => { setForm(EMPTY); setEditingId(null); setAdding(false); };
+
+  // Prefill the form from an existing address. lat/lng come back from MySQL as
+  // strings — coerce to numbers so the map maths (and the initial region) work.
+  const startEdit = (a) => {
+    setForm({
+      name: a.name || 'Home',
+      address_line_1: a.address_line_1 || '',
+      city: a.city || '',
+      pincode: a.pincode || '',
+      latitude: a.latitude != null ? Number(a.latitude) : null,
+      longitude: a.longitude != null ? Number(a.longitude) : null,
+    });
+    setEditingId(a.id);
+    setAdding(true);
+  };
+
+  const confirmRemove = (a) => {
+    Alert.alert('Delete address', `Remove "${a.name || a.address_type}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await onRemove(a.id);
+            if (editingId === a.id) resetForm();
+          } catch (e) {
+            Alert.alert('Could not delete', errMessage(e));
+          }
+        },
+      },
+    ]);
+  };
+
   const save = async () => {
     if (!form.address_line_1.trim() || !form.city.trim()) {
       return Alert.alert('Address', 'Please enter the address and city.');
     }
     setSaving(true);
     try {
-      const created = await onAdd({
-        ...form,
-        address_type: 'home',
-        is_default: addresses.length === 0,
-      });
-      onSelect(created.id);
+      const payload = { ...form, address_type: 'home' };
+      const saved = editingId
+        ? await onUpdate(editingId, payload)
+        : await onAdd({ ...payload, is_default: addresses.length === 0 });
+      onSelect(saved.id);
+      resetForm();
     } catch (e) {
       Alert.alert('Could not save', errMessage(e));
     } finally {
@@ -97,7 +137,7 @@ function AddressSheet({ addresses, selectedId, onSelect, onAdd, onClose }) {
         </TouchableOpacity>
       </Row>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
+      <Screen scroll edges={[]} style={{ paddingBottom: spacing.xxl }}>
         <Muted style={{ marginBottom: spacing.md }}>
           We show you pharmacies near this address — not near where your phone is right now.
         </Muted>
@@ -117,12 +157,21 @@ function AddressSheet({ addresses, selectedId, onSelect, onAdd, onClose }) {
                 Not pinned on the map — you may be missing nearby pharmacies.
               </Muted>
             ) : null}
+
+            <Row style={styles.cardActions}>
+              <TouchableOpacity onPress={() => startEdit(a)} hitSlop={HIT}>
+                <Text style={styles.editLink}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => confirmRemove(a)} hitSlop={HIT} style={{ marginLeft: spacing.lg }}>
+                <Text style={styles.deleteLink}>Delete</Text>
+              </TouchableOpacity>
+            </Row>
           </Card>
         ))}
 
         {adding ? (
           <Card style={{ marginTop: spacing.sm }}>
-            <SectionTitle style={{ marginBottom: spacing.sm }}>New address</SectionTitle>
+            <SectionTitle style={{ marginBottom: spacing.sm }}>{editingId ? 'Edit address' : 'New address'}</SectionTitle>
             <TextField label="Label" value={form.name} onChangeText={(v) => set('name', v)} />
             <TextField label="Address *" value={form.address_line_1} onChangeText={(v) => set('address_line_1', v)} multiline />
             <CityPicker
@@ -162,17 +211,17 @@ function AddressSheet({ addresses, selectedId, onSelect, onAdd, onClose }) {
               </Muted>
             ) : null}
 
-            <AppButton title="Save address" color={colors.pharmacy} loading={saving} onPress={save} />
-            {addresses.length > 0 ? (
+            <AppButton title={editingId ? 'Update address' : 'Save address'} color={colors.pharmacy} loading={saving} onPress={save} />
+            {addresses.length > 0 || editingId ? (
               <AppButton title="Cancel" variant="ghost" color={colors.textMuted}
-                onPress={() => { setForm(EMPTY); setAdding(false); }} style={{ marginTop: spacing.sm }} />
+                onPress={resetForm} style={{ marginTop: spacing.sm }} />
             ) : null}
           </Card>
         ) : (
           <AppButton title="Add a new address" icon="plus" variant="outline" color={colors.pharmacy}
-            onPress={() => setAdding(true)} style={{ marginTop: spacing.sm }} />
+            onPress={() => { setForm(EMPTY); setEditingId(null); setAdding(true); }} style={{ marginTop: spacing.sm }} />
         )}
-      </ScrollView>
+      </Screen>
     </SafeAreaView>
   );
 }
@@ -195,4 +244,8 @@ const styles = StyleSheet.create({
   opt: { marginBottom: spacing.sm, borderWidth: 1.5, borderColor: 'transparent' },
   optActive: { borderColor: colors.pharmacy, backgroundColor: colors.pharmacyLight },
   optTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+
+  cardActions: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  editLink: { fontSize: font.small, fontWeight: font.semibold, color: colors.pharmacy },
+  deleteLink: { fontSize: font.small, fontWeight: font.semibold, color: colors.danger },
 });

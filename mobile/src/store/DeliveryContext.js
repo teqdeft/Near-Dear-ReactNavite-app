@@ -60,14 +60,37 @@ export function DeliveryProvider({ children }) {
     return created;
   }, [setAddressId]);
 
+  const update = useCallback(async (id, payload) => {
+    const updated = await ProfileApi.updateAddress(id, payload);
+    setAddresses((list) => list.map((a) => (a.id === id ? updated : a)));
+    return updated;
+  }, []);
+
+  const remove = useCallback(async (id) => {
+    await ProfileApi.deleteAddress(id);
+    const next = addresses.filter((a) => a.id !== id);
+    setAddresses(next);
+    // If the deleted address was the selected one, fall back to the default /
+    // first remaining address so the catalog isn't left scoped to nothing.
+    if (addressId === id) {
+      const fallback = next.find((a) => a.is_default) || next[0] || null;
+      if (fallback) {
+        setAddressId(fallback.id);
+      } else {
+        setAddressIdState(null);
+        AsyncStorage.removeItem(SELECTED_KEY).catch(() => {});
+      }
+    }
+  }, [addresses, addressId, setAddressId]);
+
   const address = useMemo(
     () => addresses.find((a) => a.id === addressId) || null,
     [addresses, addressId]
   );
 
   const value = useMemo(
-    () => ({ addresses, address, addressId, setAddressId, add, reload, loading }),
-    [addresses, address, addressId, setAddressId, add, reload, loading]
+    () => ({ addresses, address, addressId, setAddressId, add, update, remove, reload, loading }),
+    [addresses, address, addressId, setAddressId, add, update, remove, reload, loading]
   );
 
   return <DeliveryContext.Provider value={value}>{children}</DeliveryContext.Provider>;

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { useAuth } from '../../store/AuthContext';
 import { ProfileApi } from '../../api';
 import { errMessage } from '../../api/client';
-import { Card, Pill, Muted, Row, AppButton, TextField, ListRow } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, ListRow, Screen } from '../../components/UI';
 import Icon from '../../components/Icon';
 import ProfileAvatar from '../../components/ProfileAvatar';
 import CityChipsInput from '../../components/CityChipsInput';
@@ -77,13 +76,12 @@ export default function ProfileScreen({ navigation }) {
   ]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}
-        refreshControl={(
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
-            tintColor={isDriver ? colors.ambulance : colors.primary}
-            colors={[isDriver ? colors.ambulance : colors.primary]} />
-        )}>
+    <Screen scroll edges={['top']} style={{ paddingBottom: 120 }}
+      refreshControl={(
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
+          tintColor={isDriver ? colors.ambulance : colors.primary}
+          colors={[isDriver ? colors.ambulance : colors.primary]} />
+      )}>
         <View style={styles.headerCard}>
           <TouchableOpacity activeOpacity={0.85} onPress={choosePhoto} disabled={uploadingPhoto}>
             <ProfileAvatar path={profile?.profile_image} name={user?.name} size={84}
@@ -151,8 +149,7 @@ export default function ProfileScreen({ navigation }) {
         </Card>
 
         <Muted style={{ textAlign: 'center', marginTop: spacing.lg }}>NearDear • MVP v1.0</Muted>
-      </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 

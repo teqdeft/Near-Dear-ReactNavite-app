@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-  StyleSheet, ScrollView, StatusBar, Platform,
+  StyleSheet, ScrollView, StatusBar, Platform, KeyboardAvoidingView, findNodeHandle, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, font, shadow } from '../theme';
@@ -9,22 +9,38 @@ import Icon from './Icon';
 
 export { Icon };
 
+// Lets any TextField reach the ScrollView it lives inside, so it can scroll
+// itself above the keyboard on focus. Null on screens with no scroll view.
+const ScrollContext = React.createContext(null);
+
 // ---- Screen wrapper ---------------------------------------------------
 export function Screen({ children, scroll = false, style, padded = true, edges = ['top'], refreshControl }) {
+  const scrollRef = React.useRef(null);
   const inner = (
     <View style={[padded && { padding: spacing.lg }, { flexGrow: 1 }, style]}>{children}</View>
   );
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
-      {scroll ? (
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ flexGrow: 1 }} refreshControl={refreshControl}>
-          {inner}
-        </ScrollView>
-      ) : (
-        inner
-      )}
+      {/* Lifts the focused input above the keyboard on every screen at once.
+          iOS pads the bottom; Android resizes the window (adjustResize in the
+          manifest), so "height" here lines the container up with that resize
+          instead of double-adjusting the way "padding" would. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollContext.Provider value={scroll ? scrollRef : null}>
+          {scroll ? (
+            <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xl }} refreshControl={refreshControl}>
+              {inner}
+            </ScrollView>
+          ) : (
+            inner
+          )}
+        </ScrollContext.Provider>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -83,20 +99,64 @@ export function AppButton({
   );
 }
 
+// Scrolls the focused input above the keyboard when it lives inside a
+// <Screen scroll>. Returns a ref to attach to the TextInput plus an onFocus
+// handler. Shared so custom inputs (CityPicker, CityChipsInput) get the exact
+// same behaviour as TextField.
+//
+// We only scroll ONCE THE KEYBOARD IS UP: on a fixed delay, tapping the bottom
+// field first (keyboard still closed) fires before RN knows the keyboard frame,
+// so it computes a negative offset, clamps it to 0, and jumps the screen to the
+// top instead of to the field. And after keyboardDidShow we wait a beat more so
+// the KeyboardAvoidingView has finished resizing before we measure.
+export function useKeyboardAwareFocus() {
+  const scrollRef = React.useContext(ScrollContext);
+  const inputRef = React.useRef(null);
+
+  const onFocus = () => {
+    const sv = scrollRef?.current;
+    if (!sv || !inputRef.current) return;
+
+    const run = () => {
+      const responder = sv.getScrollResponder ? sv.getScrollResponder() : sv;
+      const node = findNodeHandle(inputRef.current);
+      if (node && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+        responder.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
+      }
+    };
+
+    if (Keyboard.isVisible && Keyboard.isVisible()) {
+      setTimeout(run, 80);
+    } else {
+      const sub = Keyboard.addListener('keyboardDidShow', () => {
+        sub.remove();
+        setTimeout(run, 150);
+      });
+    }
+  };
+
+  return { inputRef, onFocus };
+}
+
 // ---- Input ------------------------------------------------------------
-export function TextField({ label, error, leftIcon, style, inputStyle, secureTextEntry, ...props }) {
+export function TextField({ label, error, leftIcon, style, inputStyle, secureTextEntry, onFocus, ...props }) {
   const [hidden, setHidden] = React.useState(true);
   const isPassword = !!secureTextEntry;
+  const { inputRef, onFocus: scrollIntoView } = useKeyboardAwareFocus();
+  const handleFocus = (e) => { onFocus?.(e); scrollIntoView(); };
+
   return (
     <View style={[{ marginBottom: spacing.md }, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.inputWrap, error && { borderColor: colors.danger }]}>
         {leftIcon ? <Icon name={leftIcon} size={19} color={colors.textMuted} style={{ marginRight: 8 }} /> : null}
         <TextInput
+          ref={inputRef}
           placeholderTextColor={colors.textMuted}
           style={[styles.input, inputStyle]}
           secureTextEntry={isPassword ? hidden : false}
           {...props}
+          onFocus={handleFocus}
         />
         {isPassword ? (
           <TouchableOpacity onPress={() => setHidden((h) => !h)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -153,11 +213,15 @@ export function ListRow({ icon, iconColor = colors.primary, title, subtitle, rig
 }
 
 // ---- Pill / Badge -----------------------------------------------------
-export function Pill({ label, color = colors.primary, bg, style, icon }) {
+export function Pill({ label, color = colors.primary, bg, style, icon, numberOfLines }) {
   return (
     <View style={[styles.pill, { backgroundColor: bg || color + '1E' }, style]}>
       {icon ? <Icon name={icon} size={12} color={color} style={{ marginRight: 4 }} /> : null}
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
+      {/* flexShrink lets a long label (e.g. a list of cities) truncate to "…"
+          instead of pushing the pill past its container. */}
+      <Text style={[styles.pillText, { color }, numberOfLines ? { flexShrink: 1 } : null]} numberOfLines={numberOfLines}>
+        {label}
+      </Text>
     </View>
   );
 }

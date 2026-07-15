@@ -8,6 +8,7 @@ router.put('/', c.updateProfile);
 router.post('/avatar', intoFolder('profiles'), upload.single('file'), c.uploadAvatar);
 router.get('/addresses', c.listAddresses);
 router.post('/addresses', c.addAddress);
+router.put('/addresses/:id', c.updateAddress);
 router.delete('/addresses/:id', c.deleteAddress);
 router.post('/delete-request', c.requestAccountDeletion);
 

@@ -29,6 +29,7 @@ export const ProfileApi = {
     data(client.post('/profile/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } })),
   addresses: () => data(client.get('/profile/addresses')),
   addAddress: (payload) => data(client.post('/profile/addresses', payload)),
+  updateAddress: (id, payload) => data(client.put(`/profile/addresses/${id}`, payload)),
   deleteAddress: (id) => full(client.delete(`/profile/addresses/${id}`)),
   requestDeletion: (reason) => full(client.post('/profile/delete-request', { reason })),
 };
@@ -97,6 +98,7 @@ export const NotificationApi = {
   unreadCount: () => data(client.get('/notifications/unread-count')),
   markRead: (id) => full(client.put(`/notifications/${id}/read`)),
   markAllRead: () => full(client.put('/notifications/read-all')),
+  remove: (id) => full(client.delete(`/notifications/${id}`)),
   // The FCM address of this device, so the backend has somewhere to push to.
   registerDevice: (token, platform) => full(client.post('/notifications/device-token', { token, platform })),
   unregisterDevice: (token) => full(client.delete('/notifications/device-token', { data: { token } })),

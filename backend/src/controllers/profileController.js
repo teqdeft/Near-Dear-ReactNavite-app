@@ -97,6 +97,34 @@ const addAddress = asyncHandler(async (req, res) => {
   return created(res, row, 'Address added');
 });
 
+// PUT /profile/addresses/:id
+const updateAddress = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const existing = await db('user_addresses').where({ id: req.params.id, user_id: userId }).first();
+  if (!existing) throw ApiError.notFound('Address not found');
+
+  const { address_type, name, address_line_1, address_line_2, city, state, pincode, latitude, longitude, is_default } = req.body;
+
+  if (is_default) {
+    await db('user_addresses').where({ user_id: userId }).update({ is_default: false });
+  }
+
+  // Only overwrite the fields the client actually sent. `latitude`/`longitude`
+  // arriving as null is intentional (the user changed the city and cleared the
+  // pin), so we keep null and drop only `undefined`.
+  const fields = {
+    address_type, name, address_line_1, address_line_2, city, state, pincode, latitude, longitude,
+    ...(is_default === undefined ? {} : { is_default: Boolean(is_default) }),
+  };
+  const cleaned = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+  if (Object.keys(cleaned).length) {
+    await db('user_addresses').where({ id: req.params.id, user_id: userId }).update(cleaned);
+  }
+
+  const row = await db('user_addresses').where({ id: req.params.id }).first();
+  return ok(res, row, 'Address updated');
+});
+
 // DELETE /profile/addresses/:id
 const deleteAddress = asyncHandler(async (req, res) => {
   const deleted = await db('user_addresses').where({ id: req.params.id, user_id: req.user.id }).del();
@@ -118,4 +146,4 @@ const requestAccountDeletion = asyncHandler(async (req, res) => {
   return created(res, null, 'Account deletion request submitted. Our team will process it.');
 });
 
-module.exports = { updateProfile, uploadAvatar, listAddresses, addAddress, deleteAddress, requestAccountDeletion };
+module.exports = { updateProfile, uploadAvatar, listAddresses, addAddress, updateAddress, deleteAddress, requestAccountDeletion };

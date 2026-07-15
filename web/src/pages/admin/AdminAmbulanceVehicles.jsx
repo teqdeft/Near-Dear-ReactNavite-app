@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
+import { API_BASE_URL } from '../../config';
 
 const FILTERS = ['', 'pending', 'approved', 'rejected'];
 
@@ -76,7 +77,7 @@ function Review({ id, onChanged, onClose }) {
 
   const viewDoc = async (doc) => {
     try {
-      const absolute = `${location.protocol}//${location.hostname}:4000/api/v1/files/${doc.file_url}`;
+      const absolute = `${API_BASE_URL}/files/${doc.file_url}`;
       const objectUrl = await fetchFileObjectUrl(absolute);
       setDocUrls((u) => ({ ...u, [doc.id]: objectUrl }));
     } catch (e) { setError(errMessage(e)); }

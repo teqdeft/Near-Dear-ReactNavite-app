@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Screen, AppButton, TextField, IconBadge } from '../../components/UI';
@@ -74,7 +74,6 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <Screen scroll edges={[]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.subtitle}>Choose how you want to use NearDear</Text>
 
@@ -124,7 +123,6 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.muted}>Already have an account? </Text>
           <TouchableOpacity onPress={() => navigation.goBack()}><Text style={[styles.link, { color: accent }]}>Log in</Text></TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
     </Screen>
   );
 }

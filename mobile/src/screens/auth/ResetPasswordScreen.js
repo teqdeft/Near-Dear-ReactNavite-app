@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Text, StyleSheet, Alert } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Screen, AppButton, TextField, Muted } from '../../components/UI';
@@ -30,7 +30,6 @@ export default function ResetPasswordScreen({ route, navigation }) {
 
   return (
     <Screen scroll>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.title}>Reset password</Text>
         <Muted style={{ marginBottom: spacing.xl }}>
           Code sent to {channel === 'email' ? email : `+91 ${mobile}`}
@@ -42,7 +41,6 @@ export default function ResetPasswordScreen({ route, navigation }) {
         <TextField label="Confirm password" leftIcon="lock" placeholder="••••••" secureTextEntry value={confirm} onChangeText={setConfirm} />
 
         <AppButton title="Reset password" onPress={onReset} loading={loading} style={{ marginTop: spacing.sm }} />
-      </KeyboardAvoidingView>
     </Screen>
   );
 }

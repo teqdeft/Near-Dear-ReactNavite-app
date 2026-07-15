@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
 import { useDelivery } from '../../store/DeliveryContext';
-import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle } from '../../components/UI';
+import { Card, Pill, Muted, Row, AppButton, TextField, SectionTitle, Screen } from '../../components/UI';
 import LocationPicker from '../../components/LocationPicker';
 import CityPicker from '../../components/CityPicker';
 import Icon from '../../components/Icon';
@@ -18,6 +18,7 @@ const PAYMENTS = [
 ];
 
 const EMPTY_ADDR = { name: 'Home', address_line_1: '', city: '', pincode: '', latitude: null, longitude: null };
+const ADDR_HIT = { top: 8, bottom: 8, left: 8, right: 8 };
 
 export default function CheckoutScreen({ navigation }) {
   const { items, pharmacyId, subtotal, needsPrescription, clear } = useCart();
@@ -25,9 +26,11 @@ export default function CheckoutScreen({ navigation }) {
   // pharmacy that reaches the delivery address, so if this screen had its own
   // address the user could be refused at checkout for a cart the catalog had
   // just told them was fine.
-  const { addresses, addressId, setAddressId, add: addAddress } = useDelivery();
+  const { addresses, addressId, setAddressId, add: addAddress, update: updateAddress, remove: removeAddress } = useDelivery();
   const [adding, setAdding] = useState(false);
   const [newAddr, setNewAddr] = useState(EMPTY_ADDR);
+  // null = adding a new address; an id = editing that one.
+  const [editingAddrId, setEditingAddrId] = useState(null);
   const [payment, setPayment] = useState('cod');
   const [prescriptions, setPrescriptions] = useState([]);
   const [prescriptionId, setPrescriptionId] = useState(null);
@@ -40,13 +43,48 @@ export default function CheckoutScreen({ navigation }) {
 
   useEffect(() => { if (needsPrescription) loadPrescriptions(); }, [loadPrescriptions, needsPrescription]);
 
+  const resetAddrForm = () => { setNewAddr(EMPTY_ADDR); setEditingAddrId(null); setAdding(false); };
+
   const saveNewAddress = async () => {
     if (!newAddr.address_line_1 || !newAddr.city) return Alert.alert('Address', 'Please enter address and city.');
     try {
-      await addAddress({ ...newAddr, address_type: 'home', is_default: addresses.length === 0 });
-      setNewAddr(EMPTY_ADDR);
-      setAdding(false);
+      if (editingAddrId) {
+        await updateAddress(editingAddrId, { ...newAddr, address_type: 'home' });
+      } else {
+        await addAddress({ ...newAddr, address_type: 'home', is_default: addresses.length === 0 });
+      }
+      resetAddrForm();
     } catch (e) { Alert.alert('Error', errMessage(e)); }
+  };
+
+  // lat/lng come back from MySQL as strings — coerce so the map maths work.
+  const startEditAddress = (a) => {
+    setNewAddr({
+      name: a.name || 'Home',
+      address_line_1: a.address_line_1 || '',
+      city: a.city || '',
+      pincode: a.pincode || '',
+      latitude: a.latitude != null ? Number(a.latitude) : null,
+      longitude: a.longitude != null ? Number(a.longitude) : null,
+    });
+    setEditingAddrId(a.id);
+    setAdding(true);
+  };
+
+  const confirmDeleteAddress = (a) => {
+    Alert.alert('Delete address', `Remove "${a.name || a.address_type}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await removeAddress(a.id);
+            if (editingAddrId === a.id) resetAddrForm();
+          } catch (e) { Alert.alert('Error', errMessage(e)); }
+        },
+      },
+    ]);
   };
 
   const uploadPrescription = async (from) => {
@@ -100,7 +138,7 @@ export default function CheckoutScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
+    <Screen scroll edges={[]} style={{ paddingBottom: spacing.xxl }}>
       <SectionTitle>Delivery address</SectionTitle>
       {addresses.map((a) => (
         <Card key={a.id} onPress={() => setAddressId(a.id)} style={[styles.opt, addressId === a.id && styles.optActive]}>
@@ -109,6 +147,14 @@ export default function CheckoutScreen({ navigation }) {
             {addressId === a.id ? <Pill label="Selected" color={colors.pharmacy} /> : null}
           </Row>
           <Muted style={{ marginTop: 2 }}>{a.address_line_1}, {a.city} {a.pincode}</Muted>
+          <Row style={styles.cardActions}>
+            <TouchableOpacity onPress={() => startEditAddress(a)} hitSlop={ADDR_HIT}>
+              <Text style={styles.editLink}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => confirmDeleteAddress(a)} hitSlop={ADDR_HIT} style={{ marginLeft: spacing.lg }}>
+              <Text style={styles.deleteLink}>Delete</Text>
+            </TouchableOpacity>
+          </Row>
         </Card>
       ))}
 
@@ -146,10 +192,13 @@ export default function CheckoutScreen({ navigation }) {
             </Muted>
           ) : null}
 
-          <AppButton title="Save address" color={colors.pharmacy} onPress={saveNewAddress} />
+          <AppButton title={editingAddrId ? 'Update address' : 'Save address'} color={colors.pharmacy} onPress={saveNewAddress} />
+          <AppButton title="Cancel" variant="ghost" color={colors.textMuted} onPress={resetAddrForm} style={{ marginTop: spacing.sm }} />
         </Card>
       ) : (
-        <TouchableOpacity onPress={() => setAdding(true)}><Text style={styles.link}>+ Add new address</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => { setNewAddr(EMPTY_ADDR); setEditingAddrId(null); setAdding(true); }}>
+          <Text style={styles.link}>+ Add new address</Text>
+        </TouchableOpacity>
       )}
 
       {needsPrescription && (
@@ -191,7 +240,7 @@ export default function CheckoutScreen({ navigation }) {
       </Card>
 
       <AppButton title="Place order" color={colors.pharmacy} loading={placing} onPress={placeOrder} style={{ marginTop: spacing.lg }} />
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -199,6 +248,9 @@ const styles = StyleSheet.create({
   opt: { marginBottom: spacing.sm, borderWidth: 1.5, borderColor: 'transparent' },
   optActive: { borderColor: colors.pharmacy, backgroundColor: colors.pharmacyLight },
   optTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  cardActions: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  editLink: { fontSize: font.small, fontWeight: font.semibold, color: colors.pharmacy },
+  deleteLink: { fontSize: font.small, fontWeight: font.semibold, color: colors.danger },
   link: { color: colors.primary, fontWeight: font.semibold, marginTop: spacing.sm, marginBottom: spacing.sm },
   amt: { fontWeight: font.medium, color: colors.text },
   totalLabel: { fontWeight: font.bold, color: colors.text, fontSize: font.body },

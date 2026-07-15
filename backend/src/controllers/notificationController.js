@@ -29,6 +29,14 @@ const markAllRead = asyncHandler(async (req, res) => {
   return ok(res, null, 'All marked read');
 });
 
+// DELETE /notifications/:id  — scoped to the caller so nobody can delete another
+// user's notification by guessing an id.
+const remove = asyncHandler(async (req, res) => {
+  const deleted = await db('notifications').where({ id: req.params.id, user_id: req.user.id }).del();
+  if (!deleted) throw ApiError.notFound('Notification not found');
+  return ok(res, null, 'Notification deleted');
+});
+
 // POST /notifications/device-token  — the app hands us the FCM address of the
 // device it is running on, so push has somewhere to go.
 //
@@ -71,5 +79,5 @@ const unregisterDevice = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  list, unreadCount, markRead, markAllRead, registerDevice, unregisterDevice,
+  list, unreadCount, markRead, markAllRead, remove, registerDevice, unregisterDevice,
 };

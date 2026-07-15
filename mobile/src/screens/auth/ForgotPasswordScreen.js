@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { Screen, AppButton, TextField } from '../../components/UI';
@@ -32,7 +32,6 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   return (
     <Screen scroll>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.title}>Forgot password</Text>
         <Text style={styles.subtitle}>We'll send you a code to reset it.</Text>
 
@@ -62,7 +61,6 @@ export default function ForgotPasswordScreen({ navigation }) {
           <Text style={styles.muted}>Remember your password? </Text>
           <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.link}>Log in</Text></TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
     </Screen>
   );
 }

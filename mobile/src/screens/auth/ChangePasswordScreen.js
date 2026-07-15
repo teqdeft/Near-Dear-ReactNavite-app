@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Text, StyleSheet, Alert } from 'react-native';
 import { AuthApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
@@ -32,7 +32,6 @@ export default function ChangePasswordScreen({ navigation }) {
 
   return (
     <Screen scroll>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.title}>Change password</Text>
 
         <TextField label="Current password" leftIcon="lock" placeholder="••••••" secureTextEntry value={current} onChangeText={setCurrent} />
@@ -40,7 +39,6 @@ export default function ChangePasswordScreen({ navigation }) {
         <TextField label="Confirm new password" leftIcon="lock" placeholder="••••••" secureTextEntry value={confirm} onChangeText={setConfirm} />
 
         <AppButton title="Update password" color={accent} onPress={onUpdate} loading={loading} style={{ marginTop: spacing.sm }} />
-      </KeyboardAvoidingView>
     </Screen>
   );
 }
