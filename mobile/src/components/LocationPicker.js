@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Platform, PermissionsAndroid, ActivityIndicator,
+  View, Text, StyleSheet, TouchableOpacity, Platform, PermissionsAndroid, ActivityIndicator, Alert,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
@@ -81,21 +81,44 @@ export default function LocationPicker({
 
   const locateMe = async () => {
     const granted = await ensurePermission();
-    if (!granted) return;
+    if (!granted) {
+      Alert.alert('Location permission needed', 'Please allow location access to use “My location”, or drag the map to your spot.');
+      return;
+    }
     setLocating(true);
+
+    const onSuccess = (pos) => {
+      setLocating(false);
+      const { latitude, longitude } = pos.coords;
+      armed.current = true;
+      mapRef.current?.animateToRegion(
+        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        600,
+      );
+      onChange?.({ latitude, longitude });
+    };
+
+    // Two stages: first a precise GPS fix, but GPS often can't lock indoors or on
+    // a weak signal and times out. Rather than silently give up, fall back to the
+    // faster network/fused location (lower accuracy, but it actually returns),
+    // and only if THAT fails do we tell the user.
     Geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        const { latitude, longitude } = pos.coords;
-        armed.current = true;
-        mapRef.current?.animateToRegion(
-          { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-          600,
+      onSuccess,
+      () => {
+        Geolocation.getCurrentPosition(
+          onSuccess,
+          () => {
+            setLocating(false);
+            Alert.alert(
+              'Couldn’t get your location',
+              'Make sure location/GPS is turned on and try again — or just drag the map so the pin is on your spot.',
+            );
+          },
+          // Network/fused location: no GPS lock required, so it works indoors.
+          { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 },
         );
-        onChange?.({ latitude, longitude });
       },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 },
     );
   };
 
