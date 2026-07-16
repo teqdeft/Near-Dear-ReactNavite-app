@@ -44,12 +44,12 @@ export function AuthProvider({ children }) {
   // deleted by an admin), force a logout and tell the user.
   useEffect(() => {
     setSessionExpiredHandler((message, code) => {
-      // Same reason as the explicit logout below: leave the device registered and
-      // this phone keeps receiving the ejected user's alerts, which carry other
-      // people's names and phone numbers. Fire-and-forget — the session is already
-      // gone, so this may 401, and we must not block signing the user out on it.
-      Push.unregisterDevice();
-
+      // Deliberately NO Push.unregisterDevice() here. The endpoint is
+      // authenticated and the tokens are already cleared by the time this handler
+      // runs, so the call could only 401 — and that 401 would re-trigger this very
+      // handler, looping forever and making the alert blink as each new
+      // Alert.alert replaced the visible one. Cleanup is the backend's job anyway:
+      // deleting a user CASCADEs to their device_tokens rows.
       setUser(null);
       setProfile(null);
       setDonor(null);

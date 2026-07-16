@@ -16,7 +16,21 @@ export async function clearTokens() {
 // AuthContext registers a handler here so the API layer can force a logout when
 // the session becomes invalid (e.g. the account was deleted by an admin).
 let onSessionExpired = null;
-export function setSessionExpiredHandler(fn) { onSessionExpired = fn; }
+// One-shot per session: when several requests 401 together (a dashboard firing 3
+// calls in parallel), each would otherwise invoke the handler — stacking alerts
+// that Android shows by replacing the visible one, which looks like the dialog
+// blinking. Fire once, then stay silent until a valid token is seen again.
+let sessionExpiredFired = false;
+export function setSessionExpiredHandler(fn) {
+  onSessionExpired = fn;
+  sessionExpiredFired = false;
+}
+
+function fireSessionExpired(message, code) {
+  if (sessionExpiredFired) return;
+  sessionExpiredFired = true;
+  if (onSessionExpired) onSessionExpired(message, code);
+}
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -26,7 +40,11 @@ const client = axios.create({
 // Attach the access token to every request.
 client.interceptors.request.use(async (cfg) => {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    cfg.headers.Authorization = `Bearer ${token}`;
+    // A token exists again (fresh login) — re-arm the session-expired handler.
+    sessionExpiredFired = false;
+  }
   return cfg;
 });
 
@@ -58,7 +76,7 @@ client.interceptors.response.use(
     const code = error.response?.data?.code;
     if (code === 'ACCOUNT_BLOCKED' || code === 'ACCOUNT_DELETED') {
       await clearTokens();
-      if (onSessionExpired) onSessionExpired(error.response?.data?.message, code);
+      fireSessionExpired(error.response?.data?.message, code);
       return Promise.reject(error);
     }
 
@@ -80,7 +98,7 @@ client.interceptors.response.use(
       }
       await clearTokens();
       // Session is truly invalid — tell AuthContext to log the user out.
-      if (onSessionExpired) onSessionExpired(error.response?.data?.message);
+      fireSessionExpired(error.response?.data?.message);
     }
     return Promise.reject(error);
   }
