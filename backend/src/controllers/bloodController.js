@@ -270,7 +270,10 @@ const createRequest = asyncHandler(async (req, res) => {
   // hours off. Since the backfill path (matchDonorToOpenRequests) always passes a
   // row, notifying from the body here would give two donors two different deadlines
   // for the same request.
-  const created = await db('blood_requests').where({ id }).first();
+  // Named createdRow, NOT `created` — that would shadow the response helper
+  // imported at the top and turn the final `return created(res, ...)` into a
+  // "created is not a function" crash after the request was already saved.
+  const createdRow = await db('blood_requests').where({ id }).first();
 
   if (donors.length) {
     // Batch the match inserts + notifications instead of a serial round-trip
@@ -282,7 +285,7 @@ const createRequest = asyncHandler(async (req, res) => {
       notification_sent: true,
       response_status: MATCH_RESPONSE.PENDING,
     })));
-    await notifyMany(donors.map((d) => d.user_id), donorRequestCopy(created));
+    await notifyMany(donors.map((d) => d.user_id), donorRequestCopy(createdRow));
     await db('blood_requests').where({ id }).update({ status: BLOOD_REQUEST_STATUS.MATCHED });
   }
 
