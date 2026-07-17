@@ -4,6 +4,7 @@ import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, Button, Badge, Loader, Modal } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
+import { normalize, bestScore } from '../../utils/search';
 
 export default function AdminAmbulance() {
   const [tab, setTab] = useState('fleet');
@@ -22,21 +23,37 @@ function Requests() {
   const { data, loading, reload } = useAsync(() => AdminApi.ambulanceRequests());
   const { data: ambulances, reload: reloadAmbulances } = useAsync(() => AdminApi.ambulances());
   const [assignFor, setAssignFor] = useState(null);
+  const [search, setSearch] = useState('');
 
   if (loading) return <Loader />;
   const rows = data || [];
   // Only ambulances that aren't already on another trip can be assigned.
   const availableAmbulances = (ambulances || []).filter((a) => a.status === 'available');
 
+  // Live, typo-tolerant filter over patient / mobile / pickup / drop.
+  const queryNorm = normalize(search);
+  const filtered = !queryNorm ? rows : rows
+    .map((r) => ({ r, score: bestScore(queryNorm, [r.patient_name, r.contact_mobile, r.pickup_address, r.drop_address, ...String(r.patient_name || '').split(/\s+/)]) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || b.r.id - a.r.id)
+    .map((x) => x.r);
+
   return (
     <>
+      <div className="toolbar">
+        <div className="spacer" />
+        <input className="input" type="search" style={{ maxWidth: 260 }} placeholder="Search patient, mobile, address…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
           <thead><tr><th>Patient</th><th>Pickup → Drop</th><th>Type</th><th>Status</th><th>Requested on</th><th></th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
               <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No ambulance requests.</td></tr>
-            ) : rows.map((r) => (
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No requests match “{search}”.</td></tr>
+            ) : filtered.map((r) => (
               <tr key={r.id}>
                 <td><b>{r.patient_name}</b><div className="muted">{r.contact_mobile}</div></td>
                 <td className="muted">{r.pickup_address} → {r.drop_address}</td>

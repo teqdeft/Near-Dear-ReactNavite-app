@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, ErrorState } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
+import { normalize, bestScore } from '../../utils/search';
 
 const NEXT = { open: 'in_progress', in_progress: 'resolved', resolved: 'closed' };
 const FILTERS = ['', 'open', 'in_progress', 'resolved', 'closed'];
@@ -12,6 +13,7 @@ const FILTERS = ['', 'open', 'in_progress', 'resolved', 'closed'];
 export default function AdminSupport() {
   const [params] = useSearchParams();
   const [filter, setFilter] = useState(params.get('status') || '');
+  const [search, setSearch] = useState('');
   const { data, loading, error, reload } = useAsync(() => AdminApi.tickets(filter), [filter]);
   const [busyId, setBusyId] = useState(null);
 
@@ -26,6 +28,17 @@ export default function AdminSupport() {
 
   const rows = data || [];
 
+  // Live, typo-tolerant filter over subject / message / user name / mobile.
+  const filtered = useMemo(() => {
+    const queryNorm = normalize(search);
+    if (!queryNorm) return rows;
+    return rows
+      .map((t) => ({ t, score: bestScore(queryNorm, [t.subject, t.message, t.user_name, t.user_mobile, ...String(t.user_name || '').split(/\s+/)]) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.t.id - a.t.id)
+      .map((x) => x.t);
+  }, [rows, search]);
+
   return (
     <>
       <div className="toolbar">
@@ -34,6 +47,9 @@ export default function AdminSupport() {
             {f ? f[0].toUpperCase() + f.slice(1).replace('_', ' ') : 'All'}
           </span>
         ))}
+        <div className="spacer" />
+        <input className="input" type="search" style={{ maxWidth: 240 }} placeholder="Search subject, name, mobile…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -43,7 +59,9 @@ export default function AdminSupport() {
         <tbody>
           {rows.length === 0 ? (
             <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No support tickets.</td></tr>
-          ) : rows.map((t) => (
+          ) : filtered.length === 0 ? (
+            <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No tickets match “{search}”.</td></tr>
+          ) : filtered.map((t) => (
             <tr key={t.id}>
               <td><b>{t.subject}</b><div className="muted">{t.message}</div></td>
               <td className="muted">{t.user_name || '—'}<br />{t.user_mobile}</td>

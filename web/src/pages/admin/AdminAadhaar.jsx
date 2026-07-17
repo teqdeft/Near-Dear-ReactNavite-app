@@ -1,17 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AdminApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
 import { formatDateTime } from '../../utils/datetime';
+import { normalize, bestScore } from '../../utils/search';
 import { API_BASE_URL } from '../../config';
 
 const FILTERS = ['pending', 'approved', 'rejected', ''];
 
 export default function AdminAadhaar() {
   const [filter, setFilter] = useState('pending');
+  const [search, setSearch] = useState('');
   const { data, loading, error, reload } = useAsync(() => AdminApi.aadhaarSubmissions(filter), [filter]);
   const [detailId, setDetailId] = useState(null);
+  const rows = data || [];
+
+  // Live, typo-tolerant filter over user name / mobile / email.
+  const filtered = useMemo(() => {
+    const queryNorm = normalize(search);
+    if (!queryNorm) return rows;
+    return rows
+      .map((s) => ({ s, score: bestScore(queryNorm, [s.user_name, s.user_mobile, s.user_email, ...String(s.user_name || '').split(/\s+/)]) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.s.id - a.s.id)
+      .map((x) => x.s);
+  }, [rows, search]);
 
   return (
     <>
@@ -21,6 +35,9 @@ export default function AdminAadhaar() {
             {f ? f[0].toUpperCase() + f.slice(1) : 'All'}
           </span>
         ))}
+        <div className="spacer" />
+        <input className="input" type="search" style={{ maxWidth: 240 }} placeholder="Search name, mobile, email…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -28,9 +45,11 @@ export default function AdminAadhaar() {
           <table className="table">
             <thead><tr><th>User</th><th>Contact</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? (
+              {rows.length === 0 ? (
                 <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No submissions.</td></tr>
-              ) : data.map((s) => (
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No submissions match “{search}”.</td></tr>
+              ) : filtered.map((s) => (
                 <tr key={s.id}>
                   <td><b>{s.user_name}</b></td>
                   <td className="muted">{s.user_mobile}{s.user_email ? ` • ${s.user_email}` : ''}</td>

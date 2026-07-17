@@ -477,12 +477,21 @@ const setMedicineStatus = asyncHandler(async (req, res) => {
 // ---- Orders -----------------------------------------------------------
 const listOrders = asyncHandler(async (req, res) => {
   // Paginated — the order list grows unbounded, so never return it all at once.
-  const q = db('medicine_orders as o').leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id');
+  const q = db('medicine_orders as o')
+    .leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id')
+    .leftJoin('users as u', 'u.id', 'o.user_id');
   if (req.query.status) q.andWhere('o.order_status', req.query.status);
   if (req.query.pharmacy_id) q.andWhere('o.pharmacy_id', req.query.pharmacy_id);
+  // Search across order number / customer name / customer mobile (same as the
+  // pharmacy panel's order search). Server-side so it spans every page, not
+  // just the rows currently loaded.
+  if (req.query.search) {
+    const s = `%${req.query.search}%`;
+    q.andWhere((b) => b.whereILike('o.order_number', s).orWhereILike('u.name', s).orWhereILike('u.mobile', s));
+  }
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const page = Math.max(1, Number(req.query.page) || 1);
-  const rows = await q.clone().select('o.*', 'ph.pharmacy_name')
+  const rows = await q.clone().select('o.*', 'ph.pharmacy_name', 'u.name as customer_name', 'u.mobile as customer_mobile')
     .orderBy('o.id', 'desc').limit(limit).offset((page - 1) * limit);
   const total = Number((await q.clone().count('o.id as c').first()).c);
   return ok(res, { items: rows, total, page, limit });

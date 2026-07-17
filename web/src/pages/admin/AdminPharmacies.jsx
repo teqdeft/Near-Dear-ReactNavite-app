@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AdminApi } from '../../api';
 import { fetchFileObjectUrl, errMessage } from '../../api/client';
@@ -6,14 +6,28 @@ import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
 import { API_BASE_URL } from '../../config';
 import { formatDateTime } from '../../utils/datetime';
+import { normalize, bestScore } from '../../utils/search';
 
 const FILTERS = ['', 'pending', 'approved', 'rejected', 'suspended'];
 
 export default function AdminPharmacies() {
   const [params] = useSearchParams();
   const [filter, setFilter] = useState(params.get('status') || '');
+  const [search, setSearch] = useState('');
   const { data, loading, error, reload } = useAsync(() => AdminApi.pharmacies(filter), [filter]);
   const [detailId, setDetailId] = useState(null);
+  const rows = data || [];
+
+  // Live, typo-tolerant filter over pharmacy / owner / mobile / city / license.
+  const filtered = useMemo(() => {
+    const queryNorm = normalize(search);
+    if (!queryNorm) return rows;
+    return rows
+      .map((p) => ({ p, score: bestScore(queryNorm, [p.pharmacy_name, p.owner_name, p.mobile, p.city, p.license_number, ...String(p.pharmacy_name || '').split(/\s+/)]) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.p.id - a.p.id)
+      .map((x) => x.p);
+  }, [rows, search]);
 
   return (
     <>
@@ -23,6 +37,9 @@ export default function AdminPharmacies() {
             {f ? f[0].toUpperCase() + f.slice(1) : 'All'}
           </span>
         ))}
+        <div className="spacer" />
+        <input className="input" type="search" style={{ maxWidth: 240 }} placeholder="Search pharmacy, owner, city…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -30,9 +47,11 @@ export default function AdminPharmacies() {
           <table className="table">
             <thead><tr><th>Pharmacy</th><th>City</th><th>License</th><th>Status</th><th>Applied on</th><th></th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? (
+              {rows.length === 0 ? (
                 <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No pharmacies.</td></tr>
-              ) : data.map((p) => (
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No pharmacies match “{search}”.</td></tr>
+              ) : filtered.map((p) => (
                 <tr key={p.id}>
                   <td><b>{p.pharmacy_name}</b><div className="muted">{p.owner_name} • {p.mobile}</div></td>
                   <td>{p.city}</td>
