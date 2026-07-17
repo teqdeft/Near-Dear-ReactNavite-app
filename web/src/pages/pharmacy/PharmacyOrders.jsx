@@ -36,8 +36,13 @@ export default function PharmacyOrders() {
   // Changing the filter or the search term restarts the list at page 1.
   const setFilter = (f) => { setPage(1); setSearchParams(f ? { status: f } : {}, { replace: true }); };
   const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
-  const runSearch = () => { setPage(1); setQuery(search); };
+  const [query, setQuery] = useState(''); // debounced value actually sent to the API
+  // Live search: debounce typing so it doesn't fire a request per keystroke, and
+  // any new search jumps back to page 1.
+  useEffect(() => {
+    const t = setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const { data, loading, error, reload } = useAsync(
     () => PharmacyApi.orders({ status: filter || undefined, search: query || undefined, page, limit: PAGE_SIZE }),
     [filter, query, page],
@@ -73,10 +78,8 @@ export default function PharmacyOrders() {
       </div>
 
       <div className="toolbar">
-        <input className="input" style={{ maxWidth: 260 }} placeholder="Search order no, name or mobile…"
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && runSearch()} />
-        <Button variant="outline" onClick={runSearch}>Search</Button>
+        <input className="input" type="search" style={{ maxWidth: 260 }} placeholder="Search order no, name or mobile…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
