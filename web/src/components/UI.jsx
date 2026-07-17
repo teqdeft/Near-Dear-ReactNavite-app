@@ -11,6 +11,24 @@ export function Field({ label, children }) {
 }
 
 export function Input({ label, ...props }) {
+  const [reveal, setReveal] = useState(false);
+
+  // Password fields get a show/hide eye toggle. Any other input renders as-is.
+  if (props.type === 'password') {
+    return (
+      <Field label={label}>
+        <div style={{ position: 'relative' }}>
+          <input {...props} type={reveal ? 'text' : 'password'} className="input" style={{ ...props.style, paddingRight: 42 }} />
+          <button type="button" onClick={() => setReveal((v) => !v)}
+            aria-label={reveal ? 'Hide password' : 'Show password'} tabIndex={-1}
+            style={{ position: 'absolute', top: 0, right: 0, height: '100%', width: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+            <Icon name={reveal ? 'eyeOff' : 'eye'} size={18} />
+          </button>
+        </div>
+      </Field>
+    );
+  }
+
   return (
     <Field label={label}>
       <input className="input" {...props} />

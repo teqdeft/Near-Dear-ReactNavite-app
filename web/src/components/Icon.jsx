@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Store, Truck, Users, Droplet, Ambulance, ReceiptText,
   MessageSquare, Bell, ShieldCheck, Pill, FileText, HeartPulse, Menu, CircleUser,
   Inbox, TriangleAlert, Siren, Trash2, Wallet, TrendingUp, Package, PackageCheck,
-  BadgePlus, CheckCircle2, ChefHat, Ban, Search, Phone, Plus,
+  BadgePlus, CheckCircle2, ChefHat, Ban, Search, Phone, Plus, Eye, EyeOff,
 } from 'lucide-react';
 
 // Central icon set for the admin & pharmacy web panels — a thin wrapper over
@@ -30,6 +30,8 @@ const ICONS = {
   phone: Phone,
   trash: Trash2,
   plus: Plus,
+  eye: Eye,
+  eyeOff: EyeOff,
   // states
   inbox: Inbox,
   warning: TriangleAlert,
