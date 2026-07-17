@@ -180,9 +180,13 @@ function RegisterForm({ onDone }) {
     gst_number: '', address: '', city: '', state: '', pincode: '',
     latitude: null, longitude: null,
   });
+  // Both proofs are mandatory to register — the pharmacy is created and the two
+  // documents are uploaded together in one submit.
+  const [docs, setDocs] = useState({ license: null, owner_id: null });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setDoc = (k, file) => setDocs((d) => ({ ...d, [k]: file || null }));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -194,18 +198,38 @@ function RegisterForm({ onDone }) {
     if (form.latitude == null || form.longitude == null) {
       return setError('Please pin your shop on the map — customers are matched to pharmacies near them.');
     }
+    if (!docs.license) return setError('Please upload your Drug license.');
+    if (!docs.owner_id) return setError('Please upload your Owner ID proof.');
+
     setBusy(true); setError('');
+    let created = false;
     try {
+      // Create the pharmacy first (documents attach to it), then upload both proofs.
       await PharmacyApi.register(form);
+      created = true;
+      for (const type of ['license', 'owner_id']) {
+        const fd = new FormData();
+        fd.append('document_type', type);
+        fd.append('file', docs[type]);
+        // eslint-disable-next-line no-await-in-loop
+        await PharmacyApi.uploadDocument(fd);
+      }
       onDone();
-    } catch (err) { setError(errMessage(err)); }
-    finally { setBusy(false); }
+    } catch (err) {
+      setError(errMessage(err));
+      // If registration succeeded but a document upload failed, the pharmacy now
+      // exists — move to the profile page, whose Documents section flags anything
+      // still missing, rather than trapping the user on a form that can't re-register.
+      if (created) onDone();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <form className="card" onSubmit={submit} style={{ maxWidth: 720 }}>
       <div className="section-title">Register your pharmacy</div>
-      <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>Step 2 of 2 — pharmacy details. Submitted for admin approval.</p>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>Step 2 of 2 — pharmacy details & documents. Submitted for admin approval.</p>
       {error && <div className="alert error">{error}</div>}
       <div className="row">
         <Input label="Pharmacy name *" value={form.pharmacy_name} onChange={(e) => set('pharmacy_name', e.target.value)} />
@@ -230,6 +254,23 @@ function RegisterForm({ onDone }) {
         value={form.latitude != null ? { latitude: form.latitude, longitude: form.longitude } : null}
         onChange={(c) => setForm((f) => ({ ...f, latitude: c.latitude, longitude: c.longitude }))}
       />
+
+      <div className="section-title" style={{ marginTop: 18 }}>Documents *</div>
+      <p className="muted" style={{ marginTop: -6, marginBottom: 12 }}>
+        Both a <b>Drug license</b> and an <b>Owner ID proof</b> are required to register (image or PDF).
+      </p>
+      <div className="row">
+        <div className="field">
+          <label>Drug license *</label>
+          <input className="input" type="file" accept="image/*,application/pdf"
+            onChange={(e) => setDoc('license', e.target.files[0])} style={{ paddingTop: 8 }} />
+        </div>
+        <div className="field">
+          <label>Owner ID proof *</label>
+          <input className="input" type="file" accept="image/*,application/pdf"
+            onChange={(e) => setDoc('owner_id', e.target.files[0])} style={{ paddingTop: 8 }} />
+        </div>
+      </div>
 
       <Button type="submit" loading={busy}>Submit for approval</Button>
     </form>

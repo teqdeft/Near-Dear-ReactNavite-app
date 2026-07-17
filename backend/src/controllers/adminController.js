@@ -10,7 +10,7 @@ const { expireStaleBloodRequests } = require('../services/bloodRequestService');
 const {
   ROLES, USER_STATUS, PHARMACY_APPROVAL, AMBULANCE_STATUS,
   SUPPORT_STATUS, NOTIFICATION_TYPE, ACTIVE_STATUS, AMBULANCE_APPROVAL, DOC_STATUS,
-  AADHAAR_KYC_STATUS,
+  DOC_TYPE, AADHAAR_KYC_STATUS,
 } = require('../constants/enums');
 
 const ip = (req) => req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
@@ -129,6 +129,21 @@ const reviewPharmacy = asyncHandler(async (req, res) => {
   };
   if (!(PHARMACY_TRANSITIONS[pharmacy.approval_status] || []).includes(status)) {
     throw ApiError.conflict(`Cannot change a ${pharmacy.approval_status} pharmacy to ${status}.`);
+  }
+
+  // Proofs are mandatory to go live: never approve a pharmacy that hasn't
+  // uploaded BOTH a drug license and an owner ID proof. This backs up the
+  // client-side requirement in the register form and closes any gap where a
+  // pharmacy could reach approval without both documents.
+  if (status === PHARMACY_APPROVAL.APPROVED) {
+    const docs = await db('pharmacy_documents')
+      .where({ pharmacy_id: pharmacy.id })
+      .whereIn('document_type', [DOC_TYPE.LICENSE, DOC_TYPE.OWNER_ID])
+      .select('document_type');
+    const have = new Set(docs.map((d) => d.document_type));
+    if (!have.has(DOC_TYPE.LICENSE) || !have.has(DOC_TYPE.OWNER_ID)) {
+      throw ApiError.badRequest('This pharmacy has not uploaded both required documents (Drug license and Owner ID proof), so it cannot be approved.');
+    }
   }
 
   await db('pharmacies').where({ id: pharmacy.id }).update({
