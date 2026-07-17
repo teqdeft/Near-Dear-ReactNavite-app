@@ -4,6 +4,7 @@ import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, TextArea, Button, Badge, Loader } from '../../components/UI';
 import MapPicker from '../../components/MapPicker';
+import { formatDateTime } from '../../utils/datetime';
 
 // The two documents a pharmacy must submit for approval. (GST / store photo
 // were removed to keep onboarding simple for now.)
@@ -74,7 +75,7 @@ export default function PharmacyProfile() {
               <tr key={d.id}>
                 <td style={{ textTransform: 'capitalize' }}>{d.document_type.replace('_', ' ')}</td>
                 <td><Badge value={d.status} /></td>
-                <td className="muted">{String(d.uploaded_at || '').slice(0, 10)}</td>
+                <td className="muted">{formatDateTime(d.uploaded_at)}</td>
               </tr>
             ))}
           </tbody>

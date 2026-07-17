@@ -6,6 +6,7 @@ import { useAuth } from '../store/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { Button, Loader, ErrorState } from '../components/UI';
 import Icon from '../components/Icon';
+import { formatDateTime } from '../utils/datetime';
 
 // Icon + accent colour per notification type.
 const TYPE_ICON = {
@@ -98,7 +99,7 @@ export default function NotificationsPage() {
                 <div style={{ fontWeight: n.is_read ? 500 : 700, color: 'var(--text)' }}>{n.title}</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{n.message}</div>
                 <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                  {String(n.created_at || '').slice(0, 16).replace('T', ' ')}
+                  {formatDateTime(n.created_at)}
                 </div>
               </div>
               {!n.is_read && <span style={{ width: 8, height: 8, borderRadius: 8, background: '#0E9F8E', marginTop: 6, flexShrink: 0 }} />}

@@ -6,6 +6,7 @@ import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, money, ErrorState, ReasonModal, Pagination } from '../../components/UI';
 import Icon from '../../components/Icon';
 import { API_BASE_URL } from '../../config';
+import { formatDateTime } from '../../utils/datetime';
 
 const PAGE_SIZE = 20;
 
@@ -92,7 +93,7 @@ export default function PharmacyOrders() {
                 <td><Badge value={o.order_status} /></td>
                 <td className="muted">{o.payment_method?.toUpperCase()}</td>
                 <td>{money(o.total_amount)}</td>
-                <td className="muted">{String(o.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+                <td className="muted">{formatDateTime(o.created_at)}</td>
                 <td><Button size="sm" variant="outline" onClick={() => setDetail(o.id)}>Manage</Button></td>
               </tr>
             ))}
@@ -164,7 +165,7 @@ function OrderDetail({ id, onChanged, onClose }) {
         <Badge value={order.order_status} />
       </div>
       <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-        {order.payment_method?.toUpperCase()} • Placed {String(order.created_at || '').slice(0, 16).replace('T', ' ')}
+        {order.payment_method?.toUpperCase()} • Placed {formatDateTime(order.created_at)}
       </div>
 
       <div className="card" style={{ marginTop: 12, background: '#FAFBFC' }}>
