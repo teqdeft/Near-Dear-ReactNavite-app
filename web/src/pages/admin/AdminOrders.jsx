@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Loader, ErrorState, Pagination, money } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 
 const PAGE_SIZE = 20;
 
@@ -27,7 +28,7 @@ export default function AdminOrders() {
                   <td><Badge value={o.order_status} /></td>
                   <td className="muted">{o.payment_method?.toUpperCase()}</td>
                   <td>{money(o.total_amount)}</td>
-                  <td className="muted">{String(o.created_at || '').slice(0, 10)}</td>
+                  <td className="muted">{formatDateTime(o.created_at)}</td>
                 </tr>
               ))}
             </tbody>

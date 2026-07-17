@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Input, Button, Badge, Loader, Modal } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 
 export default function AdminAmbulance() {
   const [tab, setTab] = useState('fleet');
@@ -31,16 +32,17 @@ function Requests() {
     <>
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
-          <thead><tr><th>Patient</th><th>Pickup → Drop</th><th>Type</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Patient</th><th>Pickup → Drop</th><th>Type</th><th>Status</th><th>Requested on</th><th></th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No ambulance requests.</td></tr>
+              <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No ambulance requests.</td></tr>
             ) : rows.map((r) => (
               <tr key={r.id}>
                 <td><b>{r.patient_name}</b><div className="muted">{r.contact_mobile}</div></td>
                 <td className="muted">{r.pickup_address} → {r.drop_address}</td>
                 <td><Badge value={r.ambulance_type} /></td>
                 <td><Badge value={r.status} /></td>
+                <td className="muted">{formatDateTime(r.created_at)}</td>
                 <td>
                   {['requested'].includes(r.status)
                     ? <Button size="sm" onClick={() => setAssignFor(r)}>Assign</Button>

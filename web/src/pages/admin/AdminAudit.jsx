@@ -2,6 +2,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Loader, ErrorState } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 
 export default function AdminAudit() {
   const { data, loading, error, reload } = useAsync(() => AdminApi.auditLogs());
@@ -21,7 +22,7 @@ export default function AdminAudit() {
               <td><b style={{ textTransform: 'capitalize' }}>{l.action.replace(/_/g, ' ')}</b></td>
               <td className="muted">{l.entity_type}{l.entity_id ? ` #${l.entity_id}` : ''}</td>
               <td>{l.admin_name || '—'}</td>
-              <td className="muted">{String(l.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+              <td className="muted">{formatDateTime(l.created_at)}</td>
             </tr>
           ))}
         </tbody>

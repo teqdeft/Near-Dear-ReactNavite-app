@@ -4,6 +4,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Loader, ErrorState } from '../../components/UI';
+import { formatDateTime } from '../../utils/datetime';
 
 const FILTERS = ['', 'open', 'matched', 'fulfilled', 'cancelled', 'expired'];
 
@@ -26,10 +27,10 @@ export default function AdminBloodRequests() {
       <div className="card" style={{ padding: 0 }}>
         {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
           <table className="table">
-            <thead><tr><th>Patient</th><th>Group</th><th>Units</th><th>Hospital</th><th>City</th><th>Urgency</th><th>Status</th></tr></thead>
+            <thead><tr><th>Patient</th><th>Group</th><th>Units</th><th>Hospital</th><th>City</th><th>Urgency</th><th>Status</th><th>Requested on</th></tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={7} className="muted" style={{ padding: 24 }}>No blood requests.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ padding: 24 }}>No blood requests.</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.id}>
                   <td><b>{r.patient_name}</b></td>
@@ -39,6 +40,7 @@ export default function AdminBloodRequests() {
                   <td className="muted">{r.city}</td>
                   <td><Badge value={r.urgency_level} /></td>
                   <td><Badge value={r.status} /></td>
+                  <td className="muted">{formatDateTime(r.created_at)}</td>
                 </tr>
               ))}
             </tbody>

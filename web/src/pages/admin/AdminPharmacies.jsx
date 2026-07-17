@@ -5,6 +5,7 @@ import { fetchFileObjectUrl, errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, Modal, ErrorState, ReasonModal } from '../../components/UI';
 import { API_BASE_URL } from '../../config';
+import { formatDateTime } from '../../utils/datetime';
 
 const FILTERS = ['', 'pending', 'approved', 'rejected', 'suspended'];
 
@@ -27,16 +28,17 @@ export default function AdminPharmacies() {
       <div className="card" style={{ padding: 0 }}>
         {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
           <table className="table">
-            <thead><tr><th>Pharmacy</th><th>City</th><th>License</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Pharmacy</th><th>City</th><th>License</th><th>Status</th><th>Applied on</th><th></th></tr></thead>
             <tbody>
               {(data || []).length === 0 ? (
-                <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No pharmacies.</td></tr>
+                <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No pharmacies.</td></tr>
               ) : data.map((p) => (
                 <tr key={p.id}>
                   <td><b>{p.pharmacy_name}</b><div className="muted">{p.owner_name} • {p.mobile}</div></td>
                   <td>{p.city}</td>
                   <td className="muted">{p.license_number}</td>
                   <td><Badge value={p.approval_status} /></td>
+                  <td className="muted">{formatDateTime(p.created_at)}</td>
                   <td><Button size="sm" variant="outline" onClick={() => setDetailId(p.id)}>Review</Button></td>
                 </tr>
               ))}

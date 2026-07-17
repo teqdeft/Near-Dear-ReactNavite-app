@@ -3,7 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Badge, Loader, ErrorState } from '../../components/UI';
-import { formatDate } from '../../utils/datetime';
+import { formatDate, formatDateTime } from '../../utils/datetime';
 
 const FILTERS = [
   { key: 'active', label: 'Active donors' },
@@ -27,10 +27,10 @@ export default function AdminDonors() {
       <div className="card" style={{ padding: 0 }}>
         {loading ? <Loader /> : error ? <ErrorState message={errMessage(error)} onRetry={reload} /> : (
           <table className="table">
-            <thead><tr><th>Donor</th><th>Blood group</th><th>City</th><th>Availability</th><th>Last donation</th></tr></thead>
+            <thead><tr><th>Donor</th><th>Blood group</th><th>City</th><th>Availability</th><th>Last donation</th><th>Registered on</th></tr></thead>
             <tbody>
               {(data || []).length === 0 ? (
-                <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No donors.</td></tr>
+                <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No donors.</td></tr>
               ) : data.map((donor) => (
                 <tr key={donor.id}>
                   <td><b>{donor.name}</b><div className="muted">{donor.mobile}</div></td>
@@ -42,6 +42,7 @@ export default function AdminDonors() {
                       : <span className="muted">{donor.is_available ? donor.status : 'unavailable'}</span>}
                   </td>
                   <td className="muted">{donor.last_donation_date ? formatDate(donor.last_donation_date) : '—'}</td>
+                  <td className="muted">{formatDateTime(donor.created_at)}</td>
                 </tr>
               ))}
             </tbody>
