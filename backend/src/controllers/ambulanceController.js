@@ -151,11 +151,7 @@ const DRIVER_RADIUS_KM = 10;
  * keeps the write (NOW()) and the read (TIMESTAMPDIFF against NOW()) on one
  * clock, with no zone to get wrong.
  */
-// Must stay comfortably LARGER than the driver app's duty-ping interval
-// (useDutyLocationPing → 5 min), or a location would fall stale in the gap between
-// pings — every ping lands right at the boundary and any network delay drops the
-// driver out of distance-based dispatch. ~11 min gives a full ping-cycle of margin.
-const LOCATION_FRESH_SECONDS = 11 * 60;
+const LOCATION_FRESH_SECONDS = 5 * 60;
 const LOCATION_AGE_SQL = 'TIMESTAMPDIFF(SECOND, l.updated_at, NOW())';
 
 /**
