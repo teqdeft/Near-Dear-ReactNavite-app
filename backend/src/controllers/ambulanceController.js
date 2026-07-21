@@ -125,6 +125,18 @@ const DRIVER_BUSY_STATUSES = [
 // Terminal states — once a trip reaches one of these it can't change again.
 const TERMINAL_STATUSES = [AMBULANCE_STATUS.COMPLETED, AMBULANCE_STATUS.CANCELLED];
 
+// The column that records WHEN a trip entered each stage. Set on the transition
+// so the trip timeline can show a real time next to every step. (The 'requested'
+// stage needs none — that is created_at.)
+const STATUS_TIMESTAMP = {
+  [AMBULANCE_STATUS.ASSIGNED]: 'assigned_at',
+  [AMBULANCE_STATUS.ACCEPTED]: 'accepted_at',
+  [AMBULANCE_STATUS.ON_THE_WAY]: 'on_the_way_at',
+  [AMBULANCE_STATUS.PICKED_UP]: 'picked_up_at',
+  [AMBULANCE_STATUS.COMPLETED]: 'completed_at',
+  [AMBULANCE_STATUS.CANCELLED]: 'cancelled_at',
+};
+
 // Forward-only transitions the driver flow allows from each live state.
 const STATUS_TRANSITIONS = {
   [AMBULANCE_STATUS.ASSIGNED]: [AMBULANCE_STATUS.ACCEPTED, AMBULANCE_STATUS.ON_THE_WAY, AMBULANCE_STATUS.CANCELLED],
@@ -326,7 +338,7 @@ const cancelRequest = asyncHandler(async (req, res) => {
   if ([AMBULANCE_STATUS.COMPLETED, AMBULANCE_STATUS.CANCELLED].includes(r.status)) {
     throw ApiError.badRequest('Request can no longer be cancelled');
   }
-  await db('ambulance_requests').where({ id: r.id }).update({ status: AMBULANCE_STATUS.CANCELLED });
+  await db('ambulance_requests').where({ id: r.id }).update({ status: AMBULANCE_STATUS.CANCELLED, cancelled_at: db.fn.now() });
   // Free the assigned ambulance (if any) so the driver can take new requests.
   if (r.assigned_ambulance_id) {
     await db('ambulances').where({ id: r.assigned_ambulance_id }).update({ status: 'available' });
@@ -496,7 +508,13 @@ const acceptRequest = asyncHandler(async (req, res) => {
     claimed = await db('ambulance_requests')
       .where({ id, status: AMBULANCE_STATUS.REQUESTED })
       .whereNull('assigned_driver_id')
-      .update({ assigned_driver_id: req.user.id, status: AMBULANCE_STATUS.ACCEPTED });
+      // A self-accept IS the assignment — stamp assigned_at too, so the trip
+      // timeline shows a time for the "assigned" stage (which this flow skips as a
+      // distinct status, going straight requested -> accepted).
+      .update({
+        assigned_driver_id: req.user.id, status: AMBULANCE_STATUS.ACCEPTED,
+        assigned_at: db.fn.now(), accepted_at: db.fn.now(),
+      });
   } catch (e) {
     if (e && (e.code === 'ER_DUP_ENTRY' || e.errno === 1062)) {
       throw ApiError.conflict('You already have an active trip. Complete or cancel it before accepting another.');
@@ -594,7 +612,11 @@ const updateStatus = asyncHandler(async (req, res) => {
     throw ApiError.conflict(`Cannot change a trip from "${r.status}" to "${status}".`);
   }
 
-  await db('ambulance_requests').where({ id: r.id }).update({ status });
+  // Stamp the time this stage was reached, alongside the status change itself.
+  const patch = { status };
+  const tsCol = STATUS_TIMESTAMP[status];
+  if (tsCol) patch[tsCol] = db.fn.now();
+  await db('ambulance_requests').where({ id: r.id }).update(patch);
 
   // Free the linked ambulance once the trip ends so it can take new requests.
   if (TERMINAL_STATUSES.includes(status) && r.assigned_ambulance_id) {
@@ -629,6 +651,11 @@ const releaseRequest = asyncHandler(async (req, res) => {
     status: AMBULANCE_STATUS.REQUESTED,
     assigned_driver_id: null,
     assigned_ambulance_id: null,
+    // Clear this driver's stage times — the next driver to accept starts fresh,
+    // so the timeline never shows a released driver's assign/accept/on-the-way times.
+    assigned_at: null,
+    accepted_at: null,
+    on_the_way_at: null,
   });
 
   // Re-notify other nearby drivers (not the one who just released it).

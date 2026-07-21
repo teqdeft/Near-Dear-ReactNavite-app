@@ -397,6 +397,7 @@ const assignAmbulance = asyncHandler(async (req, res) => {
     assigned_ambulance_id: ambulance_id || null,
     assigned_driver_id: driverId,
     status: AMBULANCE_STATUS.ASSIGNED,
+    assigned_at: db.fn.now(),
   });
   if (ambulance_id) await db('ambulances').where({ id: ambulance_id }).update({ status: 'busy' });
 

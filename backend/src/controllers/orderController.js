@@ -177,8 +177,20 @@ const placeOrder = asyncHandler(async (req, res) => {
 const myOrders = asyncHandler(async (req, res) => {
   const rows = await db('medicine_orders as o')
     .leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id')
+    // The delivery address (where it's going) so the home tracker can show it.
+    .leftJoin('user_addresses as ua', 'ua.id', 'o.delivery_address_id')
     .where('o.user_id', req.user.id)
-    .select('o.*', 'ph.pharmacy_name')
+    .select(
+      'o.*',
+      'ph.pharmacy_name',
+      'ph.city as pharmacy_city',
+      'ua.address_line_1 as delivery_line1',
+      'ua.city as delivery_city',
+      // A comma-separated list of the ordered medicines' names (no quantities),
+      // so a card can summarise "what's in this order" without a second call.
+      db.raw('(SELECT GROUP_CONCAT(oi.medicine_name_snapshot SEPARATOR ", ") '
+        + 'FROM medicine_order_items oi WHERE oi.order_id = o.id) as medicine_names'),
+    )
     .orderBy('o.id', 'desc');
   return ok(res, rows);
 });
@@ -187,9 +199,15 @@ const myOrders = asyncHandler(async (req, res) => {
 const orderDetail = asyncHandler(async (req, res) => {
   const order = await db('medicine_orders as o')
     .leftJoin('pharmacies as ph', 'ph.id', 'o.pharmacy_id')
+    .leftJoin('user_addresses as ua', 'ua.id', 'o.delivery_address_id')
     .where('o.id', req.params.id)
     .andWhere('o.user_id', req.user.id)
-    .select('o.*', 'ph.pharmacy_name', 'ph.mobile as pharmacy_mobile')
+    .select(
+      'o.*', 'ph.pharmacy_name', 'ph.mobile as pharmacy_mobile', 'ph.city as pharmacy_city',
+      // Full delivery address so the detail page can show where it's going.
+      'ua.name as delivery_name', 'ua.address_line_1 as delivery_line1', 'ua.address_line_2 as delivery_line2',
+      'ua.city as delivery_city', 'ua.state as delivery_state', 'ua.pincode as delivery_pincode',
+    )
     .first();
   if (!order) throw ApiError.notFound('Order not found');
   const [items, history] = await Promise.all([
