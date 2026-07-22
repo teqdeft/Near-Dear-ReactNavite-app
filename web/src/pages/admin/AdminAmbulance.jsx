@@ -20,15 +20,11 @@ export default function AdminAmbulance() {
 }
 
 function Requests() {
-  const { data, loading, reload } = useAsync(() => AdminApi.ambulanceRequests());
-  const { data: ambulances, reload: reloadAmbulances } = useAsync(() => AdminApi.ambulances());
-  const [assignFor, setAssignFor] = useState(null);
+  const { data, loading } = useAsync(() => AdminApi.ambulanceRequests());
   const [search, setSearch] = useState('');
 
   if (loading) return <Loader />;
   const rows = data || [];
-  // Only ambulances that aren't already on another trip can be assigned.
-  const availableAmbulances = (ambulances || []).filter((a) => a.status === 'available');
 
   // Live, typo-tolerant filter over patient / mobile / pickup / drop.
   const queryNorm = normalize(search);
@@ -38,6 +34,11 @@ function Requests() {
     .sort((a, b) => b.score - a.score || b.r.id - a.r.id)
     .map((x) => x.r);
 
+  // NOTE: manual "Assign ambulance" is intentionally removed for now — an
+  // admin-assigned trip lands in the 'assigned' state, which the driver app
+  // can't yet act on (it locks the driver out of other work). Requests are
+  // read-only here until drivers self-accept. Restore from git history when
+  // the driver app handles the 'assigned' state.
   return (
     <>
       <div className="toolbar">
@@ -47,12 +48,12 @@ function Requests() {
       </div>
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
-          <thead><tr><th>Patient</th><th>Pickup → Drop</th><th>Type</th><th>Status</th><th>Requested on</th><th></th></tr></thead>
+          <thead><tr><th>Patient</th><th>Pickup → Drop</th><th>Type</th><th>Status</th><th>Requested on</th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No ambulance requests.</td></tr>
+              <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No ambulance requests.</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="muted" style={{ padding: 24 }}>No requests match “{search}”.</td></tr>
+              <tr><td colSpan={5} className="muted" style={{ padding: 24 }}>No requests match “{search}”.</td></tr>
             ) : filtered.map((r) => (
               <tr key={r.id}>
                 <td><b>{r.patient_name}</b><div className="muted">{r.contact_mobile}</div></td>
@@ -60,56 +61,12 @@ function Requests() {
                 <td><Badge value={r.ambulance_type} /></td>
                 <td><Badge value={r.status} /></td>
                 <td className="muted">{formatDateTime(r.created_at)}</td>
-                <td>
-                  {['requested'].includes(r.status)
-                    ? <Button size="sm" onClick={() => setAssignFor(r)}>Assign</Button>
-                    : <span className="muted">—</span>}
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      <Modal open={!!assignFor} onClose={() => setAssignFor(null)} title="Assign ambulance">
-        {assignFor && (
-          <AssignForm request={assignFor} ambulances={availableAmbulances}
-            onDone={() => { setAssignFor(null); reload(); reloadAmbulances(); }} />
-        )}
-      </Modal>
     </>
-  );
-}
-
-function AssignForm({ request, ambulances, onDone }) {
-  const [ambulanceId, setAmbulanceId] = useState(ambulances[0]?.id || '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async () => {
-    if (!ambulanceId) return setError('No free ambulances right now — every vehicle is already on a trip. Free one up or add a new vehicle in the Fleet tab.');
-    setBusy(true); setError('');
-    try {
-      await AdminApi.assignAmbulance(request.id, { ambulance_id: Number(ambulanceId) });
-      onDone();
-    } catch (e) { setError(errMessage(e)); setBusy(false); }
-  };
-
-  return (
-    <div>
-      {error && <div className="alert error">{error}</div>}
-      <p className="muted">Patient: <b>{request.patient_name}</b> • {request.ambulance_type}</p>
-      <div className="field">
-        <label>Choose ambulance (driver is notified automatically)</label>
-        <select className="select" value={ambulanceId} onChange={(e) => setAmbulanceId(e.target.value)}>
-          {ambulances.length === 0 && <option value="">No free ambulances available</option>}
-          {ambulances.map((a) => (
-            <option key={a.id} value={a.id}>{a.vehicle_number} • {a.ambulance_type} {a.driver_name ? `• ${a.driver_name}` : ''}</option>
-          ))}
-        </select>
-      </div>
-      <Button className="block" loading={busy} onClick={submit}>Assign ambulance</Button>
-    </div>
   );
 }
 

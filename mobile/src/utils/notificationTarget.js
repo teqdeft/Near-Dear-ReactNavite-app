@@ -16,7 +16,14 @@ export function notificationTarget(item, { isDriver, isDonor, isPharmacyOwner })
   if (isDriver) {
     // The driver stack only registers the driver tabs + Support, so anything else
     // would navigate to a screen that does not exist for them.
-    if (item.type === 'ambulance') return { screen: 'DriverTrips' };
+    //
+    // Ambulance alerts land on the Dashboard (DriverHome), NOT the trips list: the
+    // most common one is "🚨 New request near you", and the only place a driver can
+    // actually act on it — see the request and tap Accept — is the Dashboard. Sending
+    // them to "My trips" (a read-only history of trips they already took) was a dead
+    // end. The Dashboard also shows their current active trip, so cancel/again alerts
+    // land somewhere useful too.
+    if (item.type === 'ambulance') return { screen: 'DriverHome' };
     if (item.type === 'support') return { screen: 'Support' };
     return null;
   }

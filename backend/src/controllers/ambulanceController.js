@@ -163,7 +163,11 @@ const DRIVER_RADIUS_KM = 10;
  * keeps the write (NOW()) and the read (TIMESTAMPDIFF against NOW()) on one
  * clock, with no zone to get wrong.
  */
-const LOCATION_FRESH_SECONDS = 5 * 60;
+// Drivers ping their location every 5 minutes while on duty (useDutyLocationPing).
+// This window must comfortably exceed that interval so a location stays valid
+// across a cycle or two — otherwise a driver is stale (and only city-matchable)
+// for most of every gap. 15 min tolerates ~2 missed pings / a flaky network.
+const LOCATION_FRESH_SECONDS = 15 * 60;
 const LOCATION_AGE_SQL = 'TIMESTAMPDIFF(SECOND, l.updated_at, NOW())';
 
 /**

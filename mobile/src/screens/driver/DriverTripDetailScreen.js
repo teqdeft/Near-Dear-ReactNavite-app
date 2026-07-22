@@ -18,6 +18,12 @@ const LABELS = {
   requested: 'Request received', assigned: 'Ambulance assigned', accepted: 'Trip accepted',
   on_the_way: 'On the way to pickup', picked_up: 'Patient picked up', completed: 'Trip completed',
 };
+// The field on the trip that holds WHEN each stage happened, so the timeline can
+// show a real time next to every step. ('requested' is the trip's created_at.)
+const STAGE_AT = {
+  requested: 'created_at', assigned: 'assigned_at', accepted: 'accepted_at',
+  on_the_way: 'on_the_way_at', picked_up: 'picked_up_at', completed: 'completed_at',
+};
 
 export default function DriverTripDetailScreen({ route }) {
   const trip = route.params?.trip || {};
@@ -33,7 +39,17 @@ export default function DriverTripDetailScreen({ route }) {
           <Text style={styles.title}>{trip.patient_name}</Text>
           <Pill label={statusLabel(status)} color={STATUS_COLOR[status] || colors.textMuted} />
         </Row>
-        <Pill label={`Type: ${trip.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
+        <Row style={{ marginTop: spacing.sm }}>
+          <Icon name="user" size={15} color={colors.textMuted} />
+          <Muted style={{ marginLeft: 6 }}>Patient: {trip.patient_name}</Muted>
+        </Row>
+        {trip.contact_mobile ? (
+          <Row style={{ marginTop: 4 }}>
+            <Icon name="phone" size={15} color={colors.textMuted} />
+            <Muted style={{ marginLeft: 6 }}>Contact: {trip.contact_mobile}</Muted>
+          </Row>
+        ) : null}
+        <Pill label={`Type: ${statusLabel(trip.ambulance_type)}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
         {trip.contact_mobile ? (
           <AppButton title={`Call ${trip.contact_mobile}`} icon="phone" variant="outline" color={colors.success}
             style={{ marginTop: spacing.md }} onPress={() => Linking.openURL(`tel:${trip.contact_mobile}`)} />
@@ -77,13 +93,17 @@ export default function DriverTripDetailScreen({ route }) {
             {FLOW.map((step, i) => {
               const done = i <= currentIdx;
               const active = i === currentIdx;
+              const at = trip[STAGE_AT[step]];
               return (
                 <Row key={step} style={{ alignItems: 'flex-start', marginTop: i === 0 ? spacing.sm : 0 }}>
                   <View style={styles.timelineCol}>
                     <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]} />
                     {i < FLOW.length - 1 && <View style={[styles.line, done && styles.lineDone]} />}
                   </View>
-                  <Text style={[styles.step, done && styles.stepDone]}>{LABELS[step]}</Text>
+                  <View style={styles.stepBody}>
+                    <Text style={[styles.step, done && styles.stepDone]}>{LABELS[step]}</Text>
+                    {at ? <Text style={styles.stepTime}>{formatDateTime(at)}</Text> : null}
+                  </View>
                 </Row>
               );
             })}
@@ -101,8 +121,10 @@ const styles = StyleSheet.create({
   dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.border, marginTop: 2 },
   dotDone: { backgroundColor: colors.ambulance },
   dotActive: { borderWidth: 3, borderColor: colors.ambulanceLight },
-  line: { width: 2, height: 28, backgroundColor: colors.border },
+  line: { width: 2, height: 32, backgroundColor: colors.border },
   lineDone: { backgroundColor: colors.ambulance },
-  step: { flex: 1, marginLeft: spacing.sm, color: colors.textMuted, fontSize: font.body, paddingBottom: 18 },
+  stepBody: { flex: 1, marginLeft: spacing.sm, paddingBottom: 18 },
+  step: { color: colors.textMuted, fontSize: font.body },
   stepDone: { color: colors.text, fontWeight: font.medium },
+  stepTime: { color: colors.textMuted, fontSize: font.tiny, marginTop: 2 },
 });

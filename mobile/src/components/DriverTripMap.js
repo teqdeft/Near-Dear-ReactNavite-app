@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, useWindowDimensions } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { colors, radius, font, spacing } from '../theme';
+import { LIGHT_MAP_STYLE } from '../constants/mapStyle';
 
 const num = (v) => (v == null || v === '' ? null : Number(v));
 
@@ -57,6 +58,7 @@ export default function DriverTripMap({ pickup, address, height }) {
       <View style={[styles.mapWrap, { height: mapH }]}>
         <MapView
           provider={PROVIDER_GOOGLE}
+          customMapStyle={LIGHT_MAP_STYLE}
           style={StyleSheet.absoluteFill}
           initialRegion={{ ...p, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
           showsUserLocation

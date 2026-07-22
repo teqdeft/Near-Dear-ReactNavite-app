@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { BloodApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAuth } from '../../store/AuthContext';
 import { Screen, AppButton, TextField, SectionTitle, Chip, Card, Muted, Row, Pill, IconBadge } from '../../components/UI';
+import Icon from '../../components/Icon';
 import KycGate from '../../components/KycGate';
 import CityChipsInput from '../../components/CityChipsInput';
 import { colors, spacing, font, BLOOD_GROUPS } from '../../theme';
@@ -126,19 +127,29 @@ export default function BecomeDonorScreen({ navigation }) {
   );
 }
 
-function ConsentRow({ value, onChange, text }) {
+// A modern tick-mark checkbox: an empty rounded box until accepted, then it fills
+// with the blood accent and shows a white check. The whole row is tappable so the
+// user can hit the label too, not just the little box.
+function ConsentRow({ value, onChange, text, color = colors.blood }) {
   return (
-    <Row style={styles.consent}>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary }} />
+    <TouchableOpacity style={styles.consent} activeOpacity={0.7} onPress={() => onChange(!value)}>
+      <View style={[styles.checkbox, value && { backgroundColor: color, borderColor: color }]}>
+        {value ? <Icon name="check-bold" size={15} color={colors.white} /> : null}
+      </View>
       <Muted style={{ flex: 1, marginLeft: spacing.md }}>{text}</Muted>
-    </Row>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   switchLabel: { fontSize: font.body, color: colors.text, fontWeight: font.medium },
-  consent: { alignItems: 'flex-start', marginBottom: spacing.md },
+  consent: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.md },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 7, borderWidth: 2,
+    borderColor: colors.border, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
   centre: { paddingVertical: spacing.xxl, alignItems: 'center' },
   doneCard: { alignItems: 'center', paddingVertical: spacing.xxl },
   doneTitle: { fontSize: font.h2, fontWeight: font.bold, color: colors.text, marginVertical: spacing.sm },

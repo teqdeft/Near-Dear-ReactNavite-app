@@ -5,6 +5,7 @@ import {
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import { colors, radius, font, spacing } from '../theme';
+import { LIGHT_MAP_STYLE } from '../constants/mapStyle';
 
 // India centroid — only used until we get a real fix or an initial value.
 const FALLBACK = { latitude: 20.5937, longitude: 78.9629 };
@@ -159,6 +160,7 @@ export default function LocationPicker({
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        customMapStyle={LIGHT_MAP_STYLE}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         // Dragging the map is the user choosing a point — from here on, trust it.

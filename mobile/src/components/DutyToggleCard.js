@@ -1,28 +1,29 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Switch, Animated, Easing, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import Icon from './Icon';
 import { parseCities } from './CityChipsInput';
-import { colors, spacing, font, radius, shadow } from '../theme';
+import { colors, spacing, font, shadow } from '../theme';
 
 /**
  * The driver's on/off duty switch — the most consequential control on their
- * screen, so it gets the room to say what it actually does.
+ * screen. Kept COMPACT: a single header row (status dot • label • toggle) plus one
+ * caption line that spells out the one thing the two states differ in. The earlier
+ * version stacked a big status light, a divider, two explainer rows and a footer,
+ * which ate half the screen; the same information now fits in a third of the height.
  *
- * The copy names the driver's OWN cities rather than saying "your cities",
- * because the whole point is the difference between the two states, and a driver
- * skimming this at 3am should not have to reason about it. Off duty is not a dead
- * end — city calls keep coming — and saying so is what stops a driver leaving the
- * switch on all night and blaming us for the battery.
+ * The caption names the driver's OWN cities rather than "your cities", because the
+ * whole point is the difference between the two states and a driver skimming this at
+ * 3am shouldn't have to reason about it. Off duty is not a dead end — city calls keep
+ * coming — and saying so is what stops a driver leaving the switch on all night and
+ * blaming us for the battery.
  */
 export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusKm = 10 }) {
-  // A slow halo behind the dot — the "live" heartbeat a driver already reads as
-  // "the system can see me" everywhere else.
+  // A slow halo behind the dot — the "live" heartbeat a driver reads as "the system
+  // can see me". A gentler ring breathes around it so the dot doesn't just blink.
   const pulse = useRef(new Animated.Value(0)).current;
-  // A second, gentler breath on a ring around it, so the dot doesn't just blink.
   const glow = useRef(new Animated.Value(0)).current;
-  // The dot pops in when duty starts. Starts at 1, NOT 0: this scale is applied
-  // to the dot in both states, so a 0 here would shrink the off-duty dot to
-  // nothing and leave a blank hole where the status indicator should be.
+  // Starts at 1, NOT 0: this scale applies in both states, so a 0 would shrink the
+  // off-duty dot to nothing and leave a blank hole where the status light should be.
   const dotScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -53,18 +54,25 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
   }, [onDuty, pulse, glow, dotScale]);
 
   const haloStyle = {
-    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] }) }],
+    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }) }],
     opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
   };
   const glowStyle = { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] }) };
   const dotStyle = { transform: [{ scale: dotScale }] };
 
-  // "Mohali, Kharar and Chandigarh" — naming them beats "your cities", which a
-  // driver has to stop and translate.
+  // "Mohali, Kharar and Chandigarh" — naming them beats "your cities".
   const list = parseCities(cities);
   const cityText = list.length === 0 ? null
     : list.length === 1 ? list[0]
       : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+
+  const caption = onDuty
+    ? (cityText
+      ? `Getting calls from ${cityText} + any within ${radiusKm} km of you. Location shared while on duty.`
+      : `Getting calls from your cities + any within ${radiusKm} km of you. Location shared while on duty.`)
+    : (cityText
+      ? `Only calls from ${cityText}. Turn on to also get calls within ${radiusKm} km of you.`
+      : `Only calls from your cities. Turn on to also get nearby calls within ${radiusKm} km.`);
 
   return (
     <View style={[styles.card, onDuty ? styles.cardOn : styles.cardOff, onDuty && shadow.soft]}>
@@ -76,9 +84,6 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
               <Animated.View style={[styles.halo, haloStyle]} />
             </>
           ) : null}
-          {/* No emoji in the title to say the same thing: this dot IS the status
-              light, and an emoji would render differently on every Android skin
-              and never match colors.ambulance. */}
           <Animated.View
             style={[styles.dot, dotStyle, { backgroundColor: onDuty ? colors.ambulance : colors.textMuted }]}
           />
@@ -93,83 +98,40 @@ export default function DutyToggleCard({ onDuty, busy, onChange, cities, radiusK
           </Text>
         </View>
 
-        <ModernToggle
-          value={onDuty}
-          disabled={busy}
-          onValueChange={onChange}
-        />
+        <ModernToggle value={onDuty} disabled={busy} onValueChange={onChange} />
       </View>
 
-      <View style={styles.divider} />
-
-      {/* What you get, spelled out — the two states differ in exactly one way and
-          this is it. */}
-      <View style={styles.lines}>
-        <Line
-          on
-          icon="pin"
-          text={cityText
-            ? `Calls from ${cityText}`
-            : 'Calls from the cities on your profile'}
-          hint="Always — on duty or off"
-        />
-        <Line
-          on={onDuty}
-          icon="ambulance"
-          text={`Calls within ${radiusKm} km of you`}
-          hint={onDuty
-            ? 'Even in towns you don’t cover'
-            : 'Turn on duty to get these'}
-        />
+      <View style={styles.captionRow}>
+        <Icon name={onDuty ? 'pin' : 'info'} size={13} color={onDuty ? colors.ambulance : colors.textMuted} />
+        <Text style={styles.caption}>{caption}</Text>
       </View>
-
-      {onDuty ? (
-        <View style={styles.footer}>
-          <Icon name="location" size={12} color={colors.ambulance} />
-          <Text style={styles.footerText}>
-            Sharing your location every 15 seconds. It stops the moment you go off duty.
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
 // Modern animated toggle button
 function ModernToggle({ value, disabled, onValueChange }) {
-  const thumbPosition = useRef(new Animated.Value(value ? 34 : 2)).current;
+  const thumbPosition = useRef(new Animated.Value(value ? 30 : 2)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(thumbPosition, {
-        toValue: value ? 34 : 2,
-        duration: 300,
-        easing: Easing.bezier(0.34, 1.56, 0.64, 1),
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.timing(thumbPosition, {
+      toValue: value ? 30 : 2,
+      duration: 300,
+      easing: Easing.bezier(0.34, 1.56, 0.64, 1),
+      useNativeDriver: false,
+    }).start();
   }, [value, thumbPosition]);
 
   const handlePress = () => {
-    if (!disabled) {
-      scaleAnim.setValue(0.9);
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 120,
-        useNativeDriver: true,
-      }).start();
-      onValueChange(!value);
-    }
+    if (disabled) return;
+    scaleAnim.setValue(0.9);
+    Animated.spring(scaleAnim, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }).start();
+    onValueChange(!value);
   };
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      disabled={disabled}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity onPress={handlePress} disabled={disabled} activeOpacity={0.7}>
       <Animated.View
         style={[
           styles.toggleContainer,
@@ -177,72 +139,26 @@ function ModernToggle({ value, disabled, onValueChange }) {
           { transform: [{ scale: scaleAnim }] },
         ]}
       >
-        <Animated.View
-          style={[
-            styles.toggleThumb,
-            { transform: [{ translateX: thumbPosition }] },
-          ]}
-        >
-          <Icon
-            name={value ? 'check' : 'x'}
-            size={16}
-            color={value ? colors.ambulance : colors.border}
-          />
+        <Animated.View style={[styles.toggleThumb, { transform: [{ translateX: thumbPosition }] }]}>
+          <Icon name={value ? 'check' : 'close'} size={14} color={value ? colors.ambulance : colors.border} />
         </Animated.View>
       </Animated.View>
     </TouchableOpacity>
   );
 }
 
-// One "you do / you don't get this" row. A tick when it's active, the plain icon
-// when it isn't — so the difference between the two states reads at a glance.
-function Line({ on, icon, text, hint }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const first = useRef(true);
-
-  // Pop the badge when the row flips. Reset to 0.85 first — springing from 1 to 1
-  // (which is what happens if you only call spring on change) animates nothing at
-  // all, so the toggle would look dead.
-  useEffect(() => {
-    if (first.current) { first.current = false; return; } // no pop on mount
-    scale.setValue(0.85);
-    Animated.spring(scale, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }).start();
-  }, [on, scale]);
-
-  return (
-    <View style={styles.line}>
-      <Animated.View style={[
-        styles.lineIcon,
-        { backgroundColor: on ? colors.ambulance : colors.border, transform: [{ scale }] },
-      ]}>
-        <Icon name={on ? 'check' : icon} size={12} color={on ? colors.white : colors.textMuted} />
-      </Animated.View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.lineText, !on && { color: colors.textMuted }]}>{text}</Text>
-        <Text style={styles.lineHint}>{hint}</Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  card: { 
-    borderRadius: 20, 
-    padding: spacing.lg, 
-    borderWidth: 0,
+  card: {
+    borderRadius: 16,
+    padding: spacing.md,
     marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  cardOn: { 
+  cardOn: {
     backgroundColor: '#FFF5F5',
     borderWidth: 1.5,
     borderColor: colors.ambulance + '20',
   },
-  cardOff: { 
+  cardOff: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border + '40',
@@ -250,60 +166,34 @@ const styles = StyleSheet.create({
 
   head: { flexDirection: 'row', alignItems: 'center' },
 
-  // Sized to hold the halo at full expansion (18 * 2.8 ≈ 50) — a smaller box and
-  // the pulse would be clipped mid-breath.
-  dotWrap: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 18, height: 18, borderRadius: 9, zIndex: 3, shadowColor: colors.ambulance, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  // Sized to hold the halo at full expansion (14 * 2.6 ≈ 36) without clipping.
+  dotWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  dot: {
+    width: 14, height: 14, borderRadius: 7, zIndex: 3,
+    shadowColor: colors.ambulance, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4, shadowRadius: 6, elevation: 3,
+  },
   glowRing: {
-    position: 'absolute', width: 32, height: 32, borderRadius: 16,
-    borderWidth: 2.5, borderColor: colors.ambulance, zIndex: 2,
+    position: 'absolute', width: 26, height: 26, borderRadius: 13,
+    borderWidth: 2, borderColor: colors.ambulance, zIndex: 2,
   },
   halo: {
-    position: 'absolute', width: 18, height: 18, borderRadius: 9,
+    position: 'absolute', width: 14, height: 14, borderRadius: 7,
     backgroundColor: colors.ambulance, zIndex: 1,
   },
 
-  titleWrap: { flex: 1, marginLeft: spacing.md },
-  title: { fontSize: font.h3, fontWeight: '600', letterSpacing: -0.3 },
-  subtitle: { fontSize: font.tiny, color: colors.textMuted, marginTop: 4, fontWeight: '500' },
+  titleWrap: { flex: 1, marginLeft: spacing.sm },
+  title: { fontSize: font.body, fontWeight: '700', letterSpacing: -0.3 },
+  subtitle: { fontSize: font.tiny, color: colors.textMuted, marginTop: 2, fontWeight: '500' },
 
-  divider: { height: 1.5, backgroundColor: colors.border + '30', marginTop: spacing.md, marginHorizontal: -spacing.lg },
+  captionRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, gap: 6 },
+  caption: { flex: 1, fontSize: font.tiny, color: colors.textMuted, lineHeight: 17, fontWeight: '500' },
 
-  lines: { marginTop: spacing.md, paddingHorizontal: 0 },
-  line: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.lg, paddingHorizontal: 0 },
-  lineIcon: {
-    width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-    marginRight: spacing.md, marginTop: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  lineText: { fontSize: font.small, fontWeight: '600', color: colors.text, lineHeight: 20 },
-  lineHint: { fontSize: font.tiny, color: colors.textMuted, marginTop: 3, lineHeight: 16, fontWeight: '400' },
-
-  footer: {
-    flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.lg,
-    paddingTop: spacing.md, paddingHorizontal: spacing.sm, borderTopWidth: 1.5, 
-    borderTopColor: colors.ambulance + '20',
-    backgroundColor: colors.ambulance + '08',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    marginHorizontal: -spacing.lg,
-    marginBottom: -spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  footerText: {
-    flex: 1, fontSize: font.tiny, color: colors.ambulance, marginLeft: 8,
-    lineHeight: 18, fontWeight: '500', letterSpacing: 0.2,
-  },
-
-  // Modern Toggle Styles
+  // Modern toggle
   toggleContainer: {
-    width: 68,
-    height: 36,
-    borderRadius: 18,
+    width: 60,
+    height: 32,
+    borderRadius: 16,
     padding: 2,
     justifyContent: 'center',
     shadowColor: '#000',
@@ -312,16 +202,12 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  toggleContainerOn: {
-    backgroundColor: colors.ambulance,
-  },
-  toggleContainerOff: {
-    backgroundColor: colors.border,
-  },
+  toggleContainerOn: { backgroundColor: colors.ambulance },
+  toggleContainerOff: { backgroundColor: colors.border },
   toggleThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',

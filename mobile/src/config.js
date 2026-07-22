@@ -10,7 +10,8 @@
  */
 
 // --- Production (used by release builds / the APK) ---
-const PROD_API_BASE_URL = 'https://near-dear-react-navite-app.vercel.app/api/v1';
+// const PROD_API_BASE_URL = 'https://near-dear-react-navite-app.vercel.app/api/v1';
+const PROD_API_BASE_URL = 'https://neardear.studioubique-dev.com/near-dear/api/v1';
 
 // --- Development (used by debug builds) ---
 // Your PC's Wi-Fi LAN IP (phone must be on the same network). Find it with

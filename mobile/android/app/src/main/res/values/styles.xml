@@ -4,6 +4,10 @@
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <!-- Customize your theme here. -->
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <!-- Explicit light window background (matches the JS theme's bg). The
+             DayNight default would be dark grey on dark-mode phones and could
+             flash behind screens during transitions. -->
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 
     <!-- Cold-start launch theme: shows the logo splash as the window background

@@ -20,6 +20,25 @@ const LABELS = {
   requested: 'Request received', assigned: 'Ambulance assigned', accepted: 'Driver accepted',
   on_the_way: 'On the way to pickup', picked_up: 'Patient picked up', completed: 'Trip completed',
 };
+// The field holding WHEN each stage happened, so each step shows a real time.
+const STAGE_AT = {
+  requested: 'created_at', assigned: 'assigned_at', accepted: 'accepted_at',
+  on_the_way: 'on_the_way_at', picked_up: 'picked_up_at', completed: 'completed_at',
+};
+
+// One clearly-tagged detail cell — icon + label on top, value beneath — laid out
+// two per row so the card stays compact and the right half isn't left empty.
+function InfoCell({ icon, label, value }) {
+  return (
+    <View style={styles.infoCell}>
+      <Row style={{ alignItems: 'center', marginBottom: 3 }}>
+        <Icon name={icon} size={14} color={colors.ambulance} />
+        <Text style={styles.infoLabel}>{label}</Text>
+      </Row>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
 
 export default function AmbulanceDetailScreen({ route }) {
   const { id } = route.params;
@@ -76,22 +95,30 @@ export default function AmbulanceDetailScreen({ route }) {
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ambulance} />}>
       <Card>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Text style={styles.title}>{r.patient_name}</Text>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.cardHeading}>Trip details</Text>
           <Pill label={statusLabel(r.status)} color={cancelled ? colors.danger : colors.ambulance} />
         </Row>
-        <Row style={{ marginTop: spacing.sm }}><Icon name="location" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Pickup: {r.pickup_address}</Muted></Row>
-        <Row style={{ marginTop: 2 }}><Icon name="hospital" size={15} color={colors.textMuted} /><Muted style={{ marginLeft: 6, flex: 1 }}>Drop: {r.drop_address}</Muted></Row>
-        <Pill label={`Type: ${r.ambulance_type}`} color={colors.ambulance} style={{ marginTop: spacing.sm }} />
-        {r.created_at ? <Muted style={{ marginTop: spacing.sm }}>Requested: {formatDateTime(r.created_at)}</Muted> : null}
+
+        {/* Every detail clearly tagged, two per row: who, from where, to where, how. */}
+        <View style={styles.infoGrid}>
+          <InfoCell icon="user" label="Patient name" value={r.patient_name} />
+          <InfoCell icon="location" label="From (pickup)" value={r.pickup_address} />
+          <InfoCell icon="hospital" label="To (hospital)" value={r.drop_address} />
+          <InfoCell icon="ambulance" label="Ambulance type" value={statusLabel(r.ambulance_type)} />
+          {r.city ? <InfoCell icon="pin" label="City" value={r.city} /> : null}
+          {r.created_at ? <InfoCell icon="clock" label="Requested at" value={formatDateTime(r.created_at)} /> : null}
+        </View>
 
         {r.driver_name && (
           <View style={styles.driver}>
-            <Row><Icon name="ambulance" size={18} color={colors.ambulance} /><Text style={styles.driverTitle}>  {r.vehicle_number || 'Assigned vehicle'}</Text></Row>
-            <Muted>Driver: {r.driver_name}</Muted>
+            <View style={styles.infoGrid}>
+              <InfoCell icon="ambulance" label="Vehicle" value={r.vehicle_number || 'Assigned vehicle'} />
+              <InfoCell icon="user" label="Driver" value={r.driver_name} />
+            </View>
             {r.driver_mobile && (
               <AppButton title="Call driver" icon="phone" variant="outline" color={colors.success}
-                style={{ marginTop: spacing.sm }} onPress={() => Linking.openURL(`tel:${r.driver_mobile}`)} />
+                style={{ marginTop: spacing.md }} onPress={() => Linking.openURL(`tel:${r.driver_mobile}`)} />
             )}
           </View>
         )}
@@ -118,13 +145,17 @@ export default function AmbulanceDetailScreen({ route }) {
           {FLOW.map((step, i) => {
             const done = i <= currentIdx;
             const active = i === currentIdx;
+            const at = r[STAGE_AT[step]];
             return (
               <Row key={step} style={{ alignItems: 'flex-start', marginTop: i === 0 ? spacing.sm : 0 }}>
                 <View style={styles.timelineCol}>
                   <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]} />
                   {i < FLOW.length - 1 && <View style={[styles.line, done && styles.lineDone]} />}
                 </View>
-                <Text style={[styles.step, done && styles.stepDone]}>{LABELS[step]}</Text>
+                <View style={styles.stepBody}>
+                  <Text style={[styles.step, done && styles.stepDone]}>{LABELS[step]}</Text>
+                  {at ? <Text style={styles.stepTime}>{formatDateTime(at)}</Text> : null}
+                </View>
               </Row>
             );
           })}
@@ -140,16 +171,21 @@ export default function AmbulanceDetailScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
-  driver: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  driverTitle: { fontSize: font.body, fontWeight: font.semibold, color: colors.text },
+  cardHeading: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: spacing.xs },
+  infoCell: { width: '48%', marginTop: spacing.md },
+  infoLabel: { fontSize: font.tiny, color: colors.textMuted, fontWeight: font.bold, letterSpacing: 0.3, textTransform: 'uppercase', marginLeft: 4 },
+  infoValue: { fontSize: font.small, color: colors.text, fontWeight: font.semibold, lineHeight: 18 },
+  driver: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   timelineTitle: { fontSize: font.h3, fontWeight: font.bold, color: colors.text, marginBottom: spacing.sm },
   timelineCol: { width: 24, alignItems: 'center' },
   dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.border, marginTop: 2 },
   dotDone: { backgroundColor: colors.ambulance },
   dotActive: { borderWidth: 3, borderColor: colors.ambulanceLight },
-  line: { width: 2, height: 28, backgroundColor: colors.border },
+  line: { width: 2, height: 32, backgroundColor: colors.border },
   lineDone: { backgroundColor: colors.ambulance },
-  step: { flex: 1, marginLeft: spacing.sm, color: colors.textMuted, fontSize: font.body, paddingBottom: 18 },
+  stepBody: { flex: 1, marginLeft: spacing.sm, paddingBottom: 18 },
+  step: { color: colors.textMuted, fontSize: font.body },
   stepDone: { color: colors.text, fontWeight: font.medium },
+  stepTime: { color: colors.textMuted, fontSize: font.tiny, marginTop: 2 },
 });

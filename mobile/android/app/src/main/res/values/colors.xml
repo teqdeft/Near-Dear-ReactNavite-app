@@ -3,4 +3,7 @@
     <!-- The tint Android paints ic_notification with, and the accent on the
          notification itself. Matches theme.colors.primary in the JS side. -->
     <color name="notification_accent">#16A34A</color>
+    <!-- Window background once the app is running — matches theme.colors.bg on
+         the JS side, so nothing dark or foreign ever flashes behind screens. -->
+    <color name="window_background">#F5F7FA</color>
 </resources>

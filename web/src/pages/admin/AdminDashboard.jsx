@@ -40,7 +40,7 @@ export default function AdminDashboard() {
         <div className="section-title">Quick links</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link className="btn outline" to="/admin/pharmacies">Pharmacy approvals</Link>
-          <Link className="btn outline" to="/admin/ambulance">Assign ambulances</Link>
+          <Link className="btn outline" to="/admin/ambulance">Ambulances &amp; fleet</Link>
           <Link className="btn outline" to="/admin/blood-requests">Blood requests</Link>
           <Link className="btn outline" to="/admin/support">Support tickets</Link>
         </div>

@@ -25,7 +25,13 @@ export default function AnimatedTabBar({ state, navigation, activeColor = colors
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
-      <View style={[styles.bar, shadow.card]}>
+      {/* Two nested views: the outer carries the shadow (a clipped view can't
+          cast one on iOS), the inner clips the frost to the pill shape.
+          NOTE: no BlurView here — on Android it snapshots the view behind it,
+          which fights react-native-screens on tab switches and left screens
+          white/blank. The translucent tint + border gives the frosted look. */}
+      <View style={[styles.barShadow, shadow.card]}>
+        <View style={styles.bar}>
         {state.routes.map((route, index) => {
           const focused = state.index === index;
           const cfg = CONFIG[route.name] || { icon: 'home', label: route.name };
@@ -56,6 +62,7 @@ export default function AnimatedTabBar({ state, navigation, activeColor = colors
             </Pressable>
           );
         })}
+        </View>
       </View>
     </View>
   );
@@ -63,9 +70,15 @@ export default function AnimatedTabBar({ state, navigation, activeColor = colors
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: spacing.xl, alignItems: 'center' },
+  barShadow: { borderRadius: radius.pill },
   bar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+    flexDirection: 'row', alignItems: 'center',
+    // Solid white — nothing shows through. The hairline edge keeps the pill
+    // visible even over pure-white content.
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(15,23,42,0.08)',
     borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 10, gap: 4,
+    overflow: 'hidden', // clips children to the pill's rounded shape
   },
   item: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

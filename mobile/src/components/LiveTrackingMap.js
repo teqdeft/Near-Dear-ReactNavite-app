@@ -8,6 +8,7 @@ import MapView, {
   Polyline,
 } from 'react-native-maps';
 import { colors, radius, font, spacing } from '../theme';
+import { LIGHT_MAP_STYLE } from '../constants/mapStyle';
 
 const num = (v) => (v == null || v === '' ? null : Number(v));
 // India centroid — only used as a last-resort fallback before any coords exist.
@@ -102,6 +103,7 @@ export default function LiveTrackingMap({ latitude, longitude, bearing, pickup, 
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        customMapStyle={LIGHT_MAP_STYLE}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         showsUserLocation={false}

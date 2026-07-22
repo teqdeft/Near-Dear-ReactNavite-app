@@ -5,6 +5,7 @@ import { OrderApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useCart } from '../../store/CartContext';
 import { Card, Pill, Muted, Row, AppButton, Loader, SectionTitle, EmptyState } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
 import { statusLabel } from '../../utils/status';
 import { colors, spacing, font } from '../../theme';
@@ -34,6 +35,14 @@ export default function OrderDetailScreen({ route, navigation }) {
   if (err && !data) return <EmptyState icon="alert" title="Couldn't load" subtitle="Please check your connection and try again." action={<AppButton title="Retry" onPress={load} />} />;
   if (!data) return <Loader />;
   const { order, items, history } = data;
+
+  // Full "where it's going" address, skipping any empty parts.
+  const deliveryLines = [
+    order.delivery_line1,
+    order.delivery_line2,
+    [order.delivery_city, order.delivery_state].filter(Boolean).join(', '),
+    order.delivery_pincode,
+  ].filter(Boolean);
 
   // Re-add this order's items to the cart (one tap to reorder the same medicines).
   // Skips items that are no longer available (removed / out of stock).
@@ -83,7 +92,9 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Text style={styles.num}>{order.order_number}</Text>
           <Pill label={statusLabel(order.order_status)} color={STATUS_COLOR[order.order_status] || colors.textMuted} />
         </Row>
-        <Muted style={{ marginTop: 4 }}>{order.pharmacy_name}</Muted>
+        <Muted style={{ marginTop: 4 }}>
+          {order.pharmacy_name}{order.pharmacy_city ? `, ${order.pharmacy_city}` : ''}
+        </Muted>
         {order.created_at ? <Muted style={{ marginTop: 2 }}>Placed: {formatDateTime(order.created_at)}</Muted> : null}
         {order.delivered_at ? <Muted style={{ marginTop: 2, color: colors.success }}>Delivered: {formatDateTime(order.delivered_at)}</Muted> : null}
         {order.rejection_reason ? <Muted style={{ color: colors.danger, marginTop: 4 }}>Rejected: {order.rejection_reason}</Muted> : null}
@@ -92,6 +103,21 @@ export default function OrderDetailScreen({ route, navigation }) {
             onPress={() => Linking.openURL(`tel:${order.pharmacy_mobile}`)} />
         ) : null}
       </Card>
+
+      {deliveryLines.length ? (
+        <>
+          <SectionTitle style={{ marginTop: spacing.lg }}>Delivery address</SectionTitle>
+          <Card>
+            <Row style={{ alignItems: 'flex-start' }}>
+              <Icon name="location" size={16} color={colors.pharmacy} />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                {order.delivery_name ? <Text style={styles.addrName}>{order.delivery_name}</Text> : null}
+                {deliveryLines.map((line, i) => <Muted key={i}>{line}</Muted>)}
+              </View>
+            </Row>
+          </Card>
+        </>
+      ) : null}
 
       <SectionTitle style={{ marginTop: spacing.lg }}>Items</SectionTitle>
       <Card>
@@ -137,6 +163,7 @@ export default function OrderDetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   num: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
+  addrName: { fontSize: font.body, fontWeight: font.semibold, color: colors.text, marginBottom: 2 },
   itemRow: { justifyContent: 'space-between', paddingVertical: spacing.sm },
   itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   itemName: { flex: 1, color: colors.text, fontSize: font.body },

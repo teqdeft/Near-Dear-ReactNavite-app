@@ -25,6 +25,7 @@ import DriverDashboardScreen from '../screens/driver/DriverDashboardScreen';
 import DriverTripsScreen from '../screens/driver/DriverTripsScreen';
 import DriverVehicleScreen from '../screens/driver/DriverVehicleScreen';
 import DriverTripDetailScreen from '../screens/driver/DriverTripDetailScreen';
+import DriverTripListScreen from '../screens/driver/DriverTripListScreen';
 
 // Tabs
 import HomeScreen from '../screens/HomeScreen';
@@ -126,6 +127,8 @@ export default function RootNavigator() {
           <Stack.Screen name="Main" component={DriverTabs} options={{ headerShown: false }} />
           <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} options={{ title: 'My Ambulance' }} />
           <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} options={{ title: 'Trip details' }} />
+          <Stack.Screen name="DriverTripList" component={DriverTripListScreen}
+            options={({ route }) => ({ title: route.params?.title || 'Trips' })} />
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
           <Stack.Screen name="Terms" component={TermsConditionsScreen} options={{ title: 'Terms & Conditions' }} />
           <Stack.Screen name="EmergencyHelp" component={EmergencyHelpScreen} options={{ title: 'Emergency Help' }} />
