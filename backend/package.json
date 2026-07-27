@@ -11,7 +11,10 @@
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js",
     "migrate:make": "knex migrate:make --knexfile knexfile.js",
     "seed": "knex seed:run --knexfile knexfile.js",
-    "db:setup": "npm run migrate && npm run seed"
+    "db:setup": "npm run migrate && npm run seed",
+    "db:clean": "node src/db/scripts/resetDb.js",
+    "db:reset": "npm run db:clean && npm run seed",
+    "db:reset:force": "node src/db/scripts/resetDb.js --force && npm run seed"
   },
   "keywords": [
     "neardear",
