@@ -114,6 +114,24 @@ export default function PharmacyHomeScreen({ navigation }) {
         </View>
       ) : null}
 
+      {/* Kids Care store entry — same emerald as the main pharmacy store. */}
+      <TouchableOpacity style={[styles.kidsBanner, shadow.soft]} activeOpacity={0.88}
+        onPress={() => navigation.navigate('KidsHome')}>
+        <View style={[styles.kidsBubble, { width: 96, height: 96, top: -30, right: -18 }]} />
+        <View style={[styles.kidsBubble, { width: 48, height: 48, bottom: -14, right: 60, opacity: 0.5 }]} />
+        <View style={styles.kidsIconWrap}>
+          <Icon name="kids" size={26} color={colors.kids} />
+        </View>
+        <View style={{ flex: 1, marginLeft: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.kidsTitle}>Kids Care</Text>
+            <View style={styles.kidsNew}><Text style={styles.kidsNewText}>NEW</Text></View>
+          </View>
+          <Text style={styles.kidsSub}>Medicines & essentials for your little ones</Text>
+        </View>
+        <Icon name="chevronRight" size={22} color={colors.kids} />
+      </TouchableOpacity>
+
       <View style={styles.sectionRow}>
         <Text style={styles.section}>Shop by category</Text>
         <TouchableOpacity onPress={() => navigation.navigate('MedicineList', {})}><Text style={styles.link}>View all</Text></TouchableOpacity>
@@ -163,6 +181,19 @@ const styles = StyleSheet.create({
   dropPrice: { fontSize: font.body, fontWeight: font.bold, color: colors.pharmacy, marginLeft: spacing.sm },
   dropAll: { paddingVertical: spacing.md, alignItems: 'center', backgroundColor: colors.pharmacyLight },
   dropAllText: { color: colors.pharmacy, fontWeight: font.bold, fontSize: font.small },
+  kidsBanner: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.kidsLight,
+    borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.lg, overflow: 'hidden',
+  },
+  kidsBubble: { position: 'absolute', borderRadius: 999, backgroundColor: colors.kids, opacity: 0.08 },
+  kidsIconWrap: {
+    width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center', ...shadow.soft,
+  },
+  kidsTitle: { fontSize: font.body, fontWeight: font.bold, color: colors.text },
+  kidsNew: { backgroundColor: colors.kids, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 8 },
+  kidsNewText: { color: colors.white, fontSize: 9, fontWeight: font.bold, letterSpacing: 0.5 },
+  kidsSub: { fontSize: font.tiny, color: colors.textMuted, marginTop: 2 },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.md },
   section: { fontSize: font.h3, fontWeight: font.bold, color: colors.text },
   link: { color: colors.primary, fontWeight: font.semibold },

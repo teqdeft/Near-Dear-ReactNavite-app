@@ -507,7 +507,12 @@ const listOrders = asyncHandler(async (req, res) => {
   }
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const page = Math.max(1, Number(req.query.page) || 1);
-  const rows = await q.clone().select('o.*', 'ph.pharmacy_name', 'u.name as customer_name', 'u.mobile as customer_mobile')
+  const rows = await q.clone().select(
+    'o.*', 'ph.pharmacy_name', 'u.name as customer_name', 'u.mobile as customer_mobile',
+    // Flag orders that contain kids medicines so the panel can tag them
+    // without fetching every order's items.
+    db.raw('EXISTS(SELECT 1 FROM medicine_order_items oi WHERE oi.order_id = o.id AND oi.is_kids = 1) as has_kids_items'),
+  )
     .orderBy('o.id', 'desc').limit(limit).offset((page - 1) * limit);
   const total = Number((await q.clone().count('o.id as c').first()).c);
   return ok(res, { items: rows, total, page, limit });

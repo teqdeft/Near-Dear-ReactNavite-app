@@ -41,6 +41,7 @@ export default function MedicineDetailScreen({ route, navigation }) {
         <Text style={styles.name}>{m.display_name}</Text>
         {m.brand_name ? <Muted>Brand: {m.brand_name}</Muted> : null}
         <Row style={{ marginTop: spacing.sm, flexWrap: 'wrap' }}>
+          {m.is_kids ? <Pill label="Kids" icon="kids" color={colors.kids} style={{ marginRight: 8 }} /> : null}
           {m.strength ? <Pill label={m.strength} color={colors.primary} /> : null}
           {m.form ? <Pill label={m.form} color={colors.ambulance} style={{ marginLeft: 8 }} /> : null}
           {m.prescription_required ? <Pill label="Prescription required" color={colors.danger} style={{ marginLeft: 8 }} /> : null}

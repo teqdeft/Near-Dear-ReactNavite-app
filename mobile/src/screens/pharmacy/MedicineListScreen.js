@@ -36,12 +36,13 @@ export default function MedicineListScreen({ route, navigation }) {
     const data = await CatalogApi.medicines({
       search: (q ?? search) || undefined,
       category_id: params.category_id ?? undefined,
+      is_kids: params.is_kids ? 1 : undefined,
       address_id: addressId ?? undefined,
       page: pageNum,
       limit: PAGE_SIZE,
     });
     return data || [];
-  }, [search, params.category_id, addressId]);
+  }, [search, params.category_id, params.is_kids, addressId]);
 
   // First page (or a fresh search/category) — replaces the list.
   const load = useCallback(async (q) => {
@@ -136,6 +137,11 @@ export default function MedicineListScreen({ route, navigation }) {
             search ? (
               <EmptyState icon="pharmacy" title="No medicines found"
                 subtitle="Try a different search or category." />
+            ) : params.is_kids ? (
+              // Kids filter active: pharmacies may well deliver here — they just
+              // haven't flagged kids listings yet, so don't blame the address.
+              <EmptyState icon="kids" title="No kids medicines yet"
+                subtitle="Pharmacies near you haven't listed kids medicines in this category yet." />
             ) : (
               <EmptyState icon="pharmacy" title="No pharmacies deliver here yet"
                 subtitle={address
@@ -156,6 +162,7 @@ export default function MedicineListScreen({ route, navigation }) {
                 </Muted>
                 <Row style={{ marginTop: 8 }}>
                   <Text style={styles.price}>₹{Number(item.price).toFixed(0)}</Text>
+                  {item.is_kids ? <Pill label="Kids" icon="kids" color={colors.kids} style={{ marginLeft: 8 }} /> : null}
                   {item.prescription_required ? <Pill label="Rx" color={colors.danger} style={{ marginLeft: 8 }} /> : null}
                   {item.stock_status !== 'in_stock' ? <Pill label="Out of stock" color={colors.textMuted} style={{ marginLeft: 8 }} /> : null}
                 </Row>

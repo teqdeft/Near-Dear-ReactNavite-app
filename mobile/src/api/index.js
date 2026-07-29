@@ -78,7 +78,7 @@ export const AmbulanceApi = {
 };
 
 export const CatalogApi = {
-  categories: () => data(client.get('/catalog/categories')),
+  categories: (params) => data(client.get('/catalog/categories', { params: params || {} })),
   medicines: (params) => data(client.get('/catalog/medicines', { params })),
   medicineDetail: (id) => data(client.get(`/catalog/medicines/${id}`)),
 };

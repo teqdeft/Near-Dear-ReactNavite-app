@@ -48,6 +48,7 @@ import AmbulanceDetailScreen from '../screens/ambulance/AmbulanceDetailScreen';
 
 // Pharmacy
 import PharmacyHomeScreen from '../screens/pharmacy/PharmacyHomeScreen';
+import KidsHomeScreen from '../screens/pharmacy/KidsHomeScreen';
 import MedicineListScreen from '../screens/pharmacy/MedicineListScreen';
 import MedicineDetailScreen from '../screens/pharmacy/MedicineDetailScreen';
 import CartScreen from '../screens/pharmacy/CartScreen';
@@ -159,6 +160,7 @@ export default function RootNavigator() {
 
           {/* Pharmacy module */}
           <Stack.Screen name="PharmacyHome" component={PharmacyHomeScreen} options={{ title: 'Medicine Store' }} />
+          <Stack.Screen name="KidsHome" component={KidsHomeScreen} options={{ title: 'Kids Care' }} />
           <Stack.Screen name="MedicineList" component={MedicineListScreen} options={{ title: 'Medicines' }} />
           <Stack.Screen name="MedicineDetail" component={MedicineDetailScreen} options={{ title: 'Medicine' }} />
           <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Your Cart' }} />

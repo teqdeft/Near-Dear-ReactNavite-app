@@ -123,7 +123,11 @@ export default function OrderDetailScreen({ route, navigation }) {
       <Card>
         {items.map((it, idx) => (
           <Row key={it.id} style={[styles.itemRow, idx > 0 && styles.itemBorder]}>
-            <Text style={styles.itemName}>{it.medicine_name_snapshot}</Text>
+            <Row style={{ flex: 1, flexWrap: 'wrap' }}>
+              {/* flex:0 so the pill hugs the name instead of being pushed to the edge */}
+              <Text style={[styles.itemName, { flex: 0, flexShrink: 1 }]}>{it.medicine_name_snapshot}</Text>
+              {it.is_kids ? <Pill label="Kids" icon="kids" color={colors.kids} style={{ marginLeft: 6 }} /> : null}
+            </Row>
             <Muted>x{it.quantity}</Muted>
             <Text style={styles.itemPrice}>₹{Number(it.total_price).toFixed(0)}</Text>
           </Row>

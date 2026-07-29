@@ -84,6 +84,18 @@ exports.seed = async function seed(knex) {
     { name: 'ORS Powder', brand_name: 'Electral', strength: '21.8g', form: E.MEDICINE_FORM.OTHER, prescription_required: false, slug: 'digestive-care', composition: 'Oral Rehydration Salts' },
     { name: 'Antiseptic Liquid', brand_name: 'Dettol', strength: '100ml', form: E.MEDICINE_FORM.OTHER, prescription_required: false, slug: 'first-aid', composition: 'Chloroxylenol 4.8%' },
     { name: 'Pantoprazole', brand_name: 'Pan', strength: '40mg', form: E.MEDICINE_FORM.TABLET, prescription_required: true, slug: 'digestive-care', composition: 'Pantoprazole 40mg' },
+
+    // Kids medicines (is_kids) — spread across categories so the app's Kids
+    // Care store shows a populated category grid out of the box.
+    { name: 'Paracetamol Pediatric Syrup', brand_name: 'Calpol Pediatric', strength: '120mg/5ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: false, slug: 'fever-pain-relief', composition: 'Paracetamol 120mg/5ml', is_kids: true },
+    { name: 'Mefenamic Acid Kids Suspension', brand_name: 'Meftal-P', strength: '100mg/5ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: false, slug: 'fever-pain-relief', composition: 'Mefenamic Acid 100mg/5ml', is_kids: true },
+    { name: 'Kids Cough Syrup', brand_name: 'Ascoril D Junior', strength: '60ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: false, slug: 'cough-cold', composition: 'Dextromethorphan + CPM', is_kids: true },
+    { name: 'Saline Nasal Drops', brand_name: 'Nasoclear', strength: '10ml', form: E.MEDICINE_FORM.DROPS, prescription_required: false, slug: 'cough-cold', composition: 'Sodium Chloride 0.65%', is_kids: true },
+    { name: 'Cetirizine Kids Syrup', brand_name: 'Alerid Syrup', strength: '5mg/5ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: false, slug: 'cough-cold', composition: 'Cetirizine 5mg/5ml', is_kids: true },
+    { name: 'Amoxicillin Dry Syrup', brand_name: 'Mox Kid', strength: '125mg/5ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: true, slug: 'antibiotics', composition: 'Amoxicillin 125mg/5ml', is_kids: true },
+    { name: 'Multivitamin Drops', brand_name: 'Zincovit Drops', strength: '15ml', form: E.MEDICINE_FORM.DROPS, prescription_required: false, slug: 'vitamins-supplements', composition: 'Multivitamins + Zinc', is_kids: true },
+    { name: 'Colic Relief Drops', brand_name: 'Colicaid', strength: '15ml', form: E.MEDICINE_FORM.DROPS, prescription_required: false, slug: 'digestive-care', composition: 'Simethicone + Dill Oil', is_kids: true },
+    { name: 'Zinc Syrup', brand_name: 'Z&D Syrup', strength: '20mg/5ml', form: E.MEDICINE_FORM.SYRUP, prescription_required: false, slug: 'digestive-care', composition: 'Zinc Gluconate 20mg/5ml', is_kids: true },
   ];
 
   for (const m of medicines) {
@@ -110,6 +122,7 @@ exports.seed = async function seed(knex) {
       stock_status: E.STOCK_STATUS.IN_STOCK,
       quantity_available: 100,
       prescription_required: m.prescription_required,
+      is_kids: Boolean(m.is_kids),
       status: E.ACTIVE_STATUS.ACTIVE,
     });
   }

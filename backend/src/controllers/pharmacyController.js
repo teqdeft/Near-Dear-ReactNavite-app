@@ -314,6 +314,7 @@ const addMedicine = asyncHandler(async (req, res) => {
     medicine_id: medicineId,
     custom_name: null,
     category_id: categoryId,
+    is_kids: Boolean(b.is_kids),
     price: b.price,
     mrp: b.mrp,
     stock_status: b.stock_status || 'in_stock',
@@ -334,8 +335,9 @@ const updateMedicine = asyncHandler(async (req, res) => {
   validatePricing(b);
 
   // Listing-level fields live on pharmacy_medicines.
-  const listingAllowed = ['category_id', 'price', 'mrp', 'stock_status', 'quantity_available', 'prescription_required', 'status'];
+  const listingAllowed = ['category_id', 'is_kids', 'price', 'mrp', 'stock_status', 'quantity_available', 'prescription_required', 'status'];
   const update = Object.fromEntries(Object.entries(b).filter(([k]) => listingAllowed.includes(k)));
+  if (update.is_kids !== undefined) update.is_kids = Boolean(update.is_kids);
 
   // Master-level fields (name/brand/composition/strength/form) live on the
   // shared `medicines` row. Build the patch only from keys the client sent.

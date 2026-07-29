@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Store, Truck, Users, Droplet, Ambulance, ReceiptText,
   MessageSquare, Bell, ShieldCheck, Pill, FileText, HeartPulse, Menu, CircleUser,
   Inbox, TriangleAlert, Siren, Trash2, Wallet, TrendingUp, Package, PackageCheck,
-  BadgePlus, CheckCircle2, ChefHat, Ban, Search, Phone, Plus, Eye, EyeOff,
+  BadgePlus, CheckCircle2, ChefHat, Ban, Search, Phone, Plus, Eye, EyeOff, Baby,
 } from 'lucide-react';
 
 // Central icon set for the admin & pharmacy web panels — a thin wrapper over
@@ -22,6 +22,7 @@ const ICONS = {
   audit: ShieldCheck,
   medicines: Pill,
   documents: FileText,
+  kids: Baby,
   // chrome
   brand: HeartPulse,
   menu: Menu,

@@ -79,6 +79,7 @@ const placeOrder = asyncHandler(async (req, res) => {
       price_snapshot: listing.price,
       quantity: qty,
       total_price: lineTotal,
+      is_kids: Boolean(listing.is_kids),
     });
   }
 

@@ -3,6 +3,7 @@ import { AdminApi } from '../../api';
 import { errMessage } from '../../api/client';
 import { useAsync } from '../../hooks/useAsync';
 import { Button, Badge, Loader, ErrorState, Pagination, money } from '../../components/UI';
+import Icon from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
 import { normalize, bestScore } from '../../utils/search';
 
@@ -112,7 +113,14 @@ function PharmacyOrders({ pharmacy, onBack }) {
                 </td></tr>
               ) : rows.map((o) => (
                 <tr key={o.id}>
-                  <td><b>{o.order_number}</b></td>
+                  <td>
+                    <b>{o.order_number}</b>
+                    {o.has_kids_items ? (
+                      <span className="badge" style={{ marginLeft: 6, background: '#E7F6EE', color: '#16A34A', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="kids" size={12} /> Kids
+                      </span>
+                    ) : null}
+                  </td>
                   <td>{o.customer_name || '—'}<div className="muted">{o.customer_mobile}</div></td>
                   <td><Badge value={o.order_status} /></td>
                   <td className="muted">{o.payment_method?.toUpperCase()}</td>

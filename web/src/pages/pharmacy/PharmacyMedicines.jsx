@@ -10,21 +10,24 @@ export default function PharmacyMedicines() {
   const { data: catData, reload: reloadCategories } = useAsync(() => CatalogApi.categories());
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState('all'); // 'all' | 'kids'
 
   if (loading) return <Loader />;
   if (error) return <ErrorState message={errMessage(error)} onRetry={reload} />;
   const rows = data || [];
   const categories = catData || [];
+  const kidsCount = rows.filter((m) => m.is_kids).length;
 
+  const tabbed = tab === 'kids' ? rows.filter((m) => m.is_kids) : rows;
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? rows.filter((m) => {
+    ? tabbed.filter((m) => {
         const name = (m.master_name || m.custom_name || '').toLowerCase();
         const strength = (m.strength || '').toLowerCase();
         const category = (m.category_name || '').toLowerCase();
         return name.includes(q) || strength.includes(q) || category.includes(q);
       })
-    : rows;
+    : tabbed;
 
   const lowStockCount = rows.filter((m) => m.status === 'active' && m.quantity_available != null && m.quantity_available <= 10).length;
 
@@ -32,6 +35,14 @@ export default function PharmacyMedicines() {
     <>
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Your medicine listings</div>
+        <div style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
+          <Button size="sm" variant={tab === 'all' ? undefined : 'outline'} onClick={() => setTab('all')}>
+            All ({rows.length})
+          </Button>
+          <Button size="sm" variant={tab === 'kids' ? undefined : 'outline'} onClick={() => setTab('kids')}>
+            <Icon name="kids" size={14} /> Kids ({kidsCount})
+          </Button>
+        </div>
         <div className="spacer" />
         <input
           className="input"
@@ -58,7 +69,9 @@ export default function PharmacyMedicines() {
             {rows.length === 0 ? (
               <tr><td colSpan={9} className="muted" style={{ padding: 24 }}>No medicines listed yet. Click “Add medicine”.</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="muted" style={{ padding: 24 }}>No medicines match “{query}”.</td></tr>
+              <tr><td colSpan={9} className="muted" style={{ padding: 24 }}>
+                {q ? <>No medicines match “{query}”.</> : <>No kids medicines yet. Tick “Kids medicine” while adding or editing a listing to show it in the app’s Kids Care store.</>}
+              </td></tr>
             ) : filtered.map((m) => (
               <MedicineRow key={m.id} m={m} categories={categories} onReloadCategories={reloadCategories} onChange={reload} />
             ))}
@@ -106,7 +119,14 @@ function MedicineRow({ m, categories, onReloadCategories, onChange }) {
 
   return (
     <tr>
-      <td><b>{name}</b>{m.strength ? <span className="muted"> • {m.strength}</span> : ''}</td>
+      <td>
+        <b>{name}</b>{m.strength ? <span className="muted"> • {m.strength}</span> : ''}
+        {m.is_kids ? (
+          <span className="badge" style={{ marginLeft: 6, background: '#E7F6EE', color: '#16A34A', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="kids" size={12} /> Kids
+          </span>
+        ) : null}
+      </td>
       <td className="muted">{m.category_name || '—'}</td>
       <td>{money(m.price)}</td>
       <td className="muted">{m.mrp ? money(m.mrp) : '—'}</td>
@@ -278,7 +298,7 @@ const FORMS = ['tablet', 'syrup', 'injection', 'capsule', 'drops', 'cream', 'oth
 function AddMedicine({ categories, onReloadCategories, onDone }) {
   const [form, setForm] = useState({
     custom_name: '', brand_name: '', composition: '', strength: '', form: 'tablet',
-    category_id: '', price: '', mrp: '', quantity_available: '', prescription_required: false, stock_status: 'in_stock',
+    category_id: '', price: '', mrp: '', quantity_available: '', prescription_required: false, is_kids: false, stock_status: 'in_stock',
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -303,6 +323,7 @@ function AddMedicine({ categories, onReloadCategories, onDone }) {
         mrp: form.mrp ? Number(form.mrp) : undefined,
         quantity_available: form.quantity_available ? Number(form.quantity_available) : undefined,
         prescription_required: form.prescription_required,
+        is_kids: form.is_kids,
         stock_status: form.stock_status,
       });
       onDone();
@@ -336,6 +357,10 @@ function AddMedicine({ categories, onReloadCategories, onDone }) {
           <input type="checkbox" checked={form.prescription_required} onChange={(e) => set('prescription_required', e.target.checked)} />
           Prescription required
         </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }} title="Shows this medicine in the app's Kids Care store">
+          <input type="checkbox" checked={form.is_kids} onChange={(e) => set('is_kids', e.target.checked)} />
+          <Icon name="kids" size={15} /> Kids medicine
+        </label>
         <div className="field" style={{ marginBottom: 0 }}>
           <select className="select" value={form.stock_status} onChange={(e) => set('stock_status', e.target.value)}>
             <option value="in_stock">In stock</option>
@@ -360,6 +385,7 @@ function EditMedicine({ m, categories, onReloadCategories, onDone }) {
     quantity_available: m.quantity_available != null ? String(m.quantity_available) : '',
     category_id: m.category_id ? String(m.category_id) : '',
     prescription_required: !!m.prescription_required,
+    is_kids: !!m.is_kids,
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -384,6 +410,7 @@ function EditMedicine({ m, categories, onReloadCategories, onDone }) {
         quantity_available: form.quantity_available ? Number(form.quantity_available) : null,
         category_id: form.category_id ? Number(form.category_id) : null,
         prescription_required: form.prescription_required,
+        is_kids: form.is_kids,
       });
       onDone();
     } catch (err) { setError(errMessage(err)); }
@@ -411,10 +438,16 @@ function EditMedicine({ m, categories, onReloadCategories, onDone }) {
         <Input label="MRP (₹)" type="number" value={form.mrp} onChange={(e) => set('mrp', e.target.value)} />
         <Input label="Quantity" type="number" value={form.quantity_available} onChange={(e) => set('quantity_available', e.target.value)} />
       </div>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="checkbox" checked={form.prescription_required} onChange={(e) => set('prescription_required', e.target.checked)} />
-        Prescription required
-      </label>
+      <div className="row" style={{ alignItems: 'center', marginBottom: 12 }}>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={form.prescription_required} onChange={(e) => set('prescription_required', e.target.checked)} />
+          Prescription required
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }} title="Shows this medicine in the app's Kids Care store">
+          <input type="checkbox" checked={form.is_kids} onChange={(e) => set('is_kids', e.target.checked)} />
+          <Icon name="kids" size={15} /> Kids medicine
+        </label>
+      </div>
       <Button type="submit" loading={busy} className="block">Save changes</Button>
     </form>
   );

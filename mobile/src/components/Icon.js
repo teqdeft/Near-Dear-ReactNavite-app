@@ -26,6 +26,10 @@ const ALIASES = {
   donor: 'heart-plus-outline',
   request: 'hand-heart-outline',
   prescription: 'file-document-outline',
+  kids: 'teddy-bear',
+  baby: 'baby-face-outline',
+  babyBottle: 'baby-bottle-outline',
+  babyCarriage: 'baby-carriage',
 
   // ui
   back: 'chevron-left',

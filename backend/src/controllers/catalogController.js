@@ -7,9 +7,32 @@ const { distanceKm } = require('../utils/geo');
 const { servesTarget } = require('../utils/serviceArea');
 const { PHARMACY_APPROVAL, ACTIVE_STATUS } = require('../constants/enums');
 
-// GET /catalog/categories
+// Query-string booleans arrive as strings; treat only explicit truthy values
+// as on, so ?is_kids=0 / ?is_kids=false don't accidentally enable the filter.
+const truthyParam = (v) => ['1', 'true', 'yes'].includes(String(v || '').toLowerCase());
+
+// GET /catalog/categories?is_kids=1
+// With is_kids: only categories that actually have at least one active kids
+// listing from an approved pharmacy — the Kids store must never open a
+// category that turns out to be empty.
 const categories = asyncHandler(async (req, res) => {
-  const rows = await db('medicine_categories').where({ status: ACTIVE_STATUS.ACTIVE }).orderBy('name');
+  const q = db('medicine_categories as c')
+    .where('c.status', ACTIVE_STATUS.ACTIVE)
+    .orderBy('c.name');
+
+  if (truthyParam(req.query.is_kids)) {
+    q.whereIn('c.id', function subquery() {
+      this.select(db.raw('COALESCE(pm.category_id, m.category_id)'))
+        .from('pharmacy_medicines as pm')
+        .join('pharmacies as ph', 'ph.id', 'pm.pharmacy_id')
+        .leftJoin('medicines as m', 'm.id', 'pm.medicine_id')
+        .where('pm.is_kids', true)
+        .andWhere('pm.status', ACTIVE_STATUS.ACTIVE)
+        .andWhere('ph.approval_status', PHARMACY_APPROVAL.APPROVED);
+    });
+  }
+
+  const rows = await q;
   return ok(res, rows);
 });
 
@@ -58,11 +81,12 @@ async function servingPharmacyIds(target) {
   return pharmacies.filter((ph) => servesTarget(target, ph)).map((ph) => ph.id);
 }
 
-// GET /catalog/medicines?search=&category_id=&address_id=
+// GET /catalog/medicines?search=&category_id=&is_kids=&address_id=
 // Pharmacy listings (approved pharmacies, active listings only), scoped to the
 // pharmacies that can actually serve the user's delivery address.
 const medicines = asyncHandler(async (req, res) => {
   const { search, category_id } = req.query;
+  const kidsOnly = truthyParam(req.query.is_kids);
 
   const target = await resolveDeliveryTarget(req.user.id, req.query);
   // No address and no profile city: we have nothing to scope by, so rather than
@@ -79,7 +103,7 @@ const medicines = asyncHandler(async (req, res) => {
       'pm.id', 'pm.price', 'pm.mrp', 'pm.stock_status', 'pm.prescription_required',
       'pm.pharmacy_id', 'ph.pharmacy_name', 'ph.city as pharmacy_city',
       'ph.latitude as pharmacy_latitude', 'ph.longitude as pharmacy_longitude',
-      'pm.medicine_id', 'pm.custom_name',
+      'pm.medicine_id', 'pm.custom_name', 'pm.is_kids',
       'm.name as medicine_name', 'm.brand_name', 'm.strength', 'm.form', 'm.image_url',
       db.raw('COALESCE(pm.category_id, m.category_id) as category_id')
     );
@@ -89,6 +113,8 @@ const medicines = asyncHandler(async (req, res) => {
   if (category_id) {
     q.andWhereRaw('COALESCE(pm.category_id, m.category_id) = ?', [category_id]);
   }
+  // Kids store: both filters can combine — e.g. kids + "Fever & Pain Relief".
+  if (kidsOnly) q.andWhere('pm.is_kids', true);
   // Restrict to the serving set BEFORE the search candidate cap below, so we
   // never rank rows that would then be filtered out.
   if (servingIds) q.whereIn('ph.id', servingIds);
@@ -116,8 +142,13 @@ const medicines = asyncHandler(async (req, res) => {
     // via edit distance ("amoxilon" → "amoxicillin"). See utils/search.js.
     const CANDIDATE_CAP = 1500;
     const candidates = await q.orderBy('pm.id', 'desc').limit(CANDIDATE_CAP);
+    // Score against each individual word too, not just the full name — fuzzy
+    // similarity on the whole string dilutes with length, so "paracitamol"
+    // would match "Paracetamol" but never "Paracetamol Pediatric Syrup".
+    const searchTexts = (r) => [r.medicine_name, r.brand_name, r.custom_name]
+      .flatMap((f) => [f, ...String(f || '').split(/\s+/)]);
     const ranked = candidates
-      .map((r) => ({ r, score: bestScore(queryNorm, [r.medicine_name, r.brand_name, r.custom_name]) }))
+      .map((r) => ({ r, score: bestScore(queryNorm, searchTexts(r)) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score || b.r.id - a.r.id);
     const data = ranked.slice(offset, offset + limit).map((x) => toDisplay(x.r));

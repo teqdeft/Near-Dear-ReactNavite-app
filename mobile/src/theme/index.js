@@ -18,6 +18,9 @@ export const colors = {
   ambulanceLight: '#E7EFFE',
   pharmacy: '#16A34A',
   pharmacyLight: '#E7F6EE',
+  // Same emerald as pharmacy — Kids Care matches the main store look.
+  kids: '#16A34A',
+  kidsLight: '#E7F6EE',
   orange: '#F59E0B',
   orangeLight: '#FEF1DE',
 

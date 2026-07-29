@@ -190,7 +190,14 @@ function OrderDetail({ id, onChanged, onClose }) {
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>{it.medicine_name_snapshot} <span className="muted">× {it.quantity}</span></td>
+              <td>
+                {it.medicine_name_snapshot} <span className="muted">× {it.quantity}</span>
+                {it.is_kids ? (
+                  <span className="badge" style={{ marginLeft: 6, background: '#E7F6EE', color: '#16A34A', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="kids" size={12} /> Kids
+                  </span>
+                ) : null}
+              </td>
               <td style={{ textAlign: 'right' }}>{money(it.total_price)}</td>
             </tr>
           ))}
