@@ -21,7 +21,7 @@ npm install
 npm run db:setup      # = npm run migrate && npm run seed
 npm run dev           # http://localhost:4000
 ```
-
+..
 ## Seeded accounts
 | Role | Mobile | Password | Login type |
 |------|--------|----------|-----------|
