@@ -23,5 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-//add dist folder to gitignore
+# Build output
 dist
+build
