@@ -61,10 +61,10 @@ export default function LoginPage() {
           <div style={{ textAlign: 'center' }} className="muted">
             Are you a pharmacy? <Link to="/signup">Register your pharmacy →</Link>
           </div>
-          <div className="alert info" style={{ marginTop: 16 }}>
+          {/* <div className="alert info" style={{ marginTop: 16 }}>
             <b>Demo admin:</b> 9999900001 / Admin@123<br />
             <b>Demo pharmacy:</b> 9999900002 / Pharma@123
-          </div>
+          </div> */}
         </form>
       </div>
 
