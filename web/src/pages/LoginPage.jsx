@@ -44,7 +44,7 @@ export default function LoginPage() {
       <div className="auth-form-side">
         <form className="auth-card card" onSubmit={submit}>
           <h2>Sign in</h2>
-          <p className="subtitle" style={{ marginBottom: 18 }}>Admin, pharmacy & driver accounts.</p>
+          {/* <p className="subtitle" style={{ marginBottom: 18 }}>Admin, pharmacy & driver accounts.</p> */}
           {error && <div className="alert error">{error}</div>}
           <Input label="Mobile number" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Enter your mobile number" />
           <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" />
